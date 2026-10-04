@@ -117,7 +117,7 @@ begin
             raise exception 'Product not found';
         end if;
 
-        if v_sold > v_qty then
+        if p_type = 'regular' and v_sold > v_qty then
             raise exception 'Kulang ang stock ng %: % na lang', v_name, v_qty;
         end if;
         update public.products set qty = qty - v_sold, updated_at = now()

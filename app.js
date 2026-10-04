@@ -1314,11 +1314,9 @@ function addToCartById(id) {
 }
 
 function addToCart(id, name, price, maxQty, cost = 0) {
-    if (maxQty <= 0) { showToast('Out of stock!', true); return; }
     const item = cart.find((i) => i.id === id);
     if (item) {
-        if (item.qty < maxQty) item.qty++;
-        else { showToast('Max stock reached.', true); return; }
+        item.qty++;
     } else {
         cart.push({ id, name, price, qty: 1, maxQty, cost });
     }
@@ -1330,7 +1328,6 @@ function changeCartQty(i, delta) {
     if (!item) return;
     const next = item.qty + delta;
     if (next <= 0) { cart.splice(i, 1); }
-    else if (next > item.maxQty) { showToast('Max stock reached.', true); return; }
     else item.qty = next;
     renderCart();
 }

@@ -1151,16 +1151,25 @@ function renderPosFilteredProducts() {
             ? `<img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy" class="w-full aspect-square object-cover">`
             : `<div class="w-full aspect-square bg-[#FBF1F7] flex items-center justify-center text-[8px] text-[#B7A7BE]">No Photo</div>`;
         return `
-            <div onclick="addToCartById(${jsArg(p.id)})" title="${esc(tooltip)}" class="bg-white rounded-lg shadow-sm border border-[#F2DCE8] overflow-hidden cursor-pointer flex flex-col transition hover:-translate-y-0.5 hover:shadow-md ${out ? 'opacity-50' : ''}">
-                ${photo}
-                <div class="p-1.5 flex flex-col flex-grow">
-                    <h3 class="font-medium text-[#2B1B33] text-[10px] leading-tight line-clamp-2">${esc(p.name)}${expiryBadge(p)}</h3>
-                    <div class="mt-auto flex justify-between items-end pt-1">
-                        <span class="text-[#C81E5C] font-bold text-[11px] group relative hover:cursor-help" title="${esc(tooltip)}">
-                            ${peso(price)}
-                        </span>
-                        <span class="text-[8px] ${out ? 'text-[#DC2626] font-semibold' : 'text-[#8A7690]'}">${out ? 'Out' : 'Qty:' + p.qty}</span>
+            <div class="relative group bg-white rounded-lg shadow-sm border border-[#F2DCE8] overflow-visible cursor-pointer flex flex-col transition hover:-translate-y-0.5 hover:shadow-md ${out ? 'opacity-50' : ''}">
+                <div onclick="addToCartById(${jsArg(p.id)})" class="flex flex-col flex-grow">
+                    ${photo}
+                    <div class="p-1.5 flex flex-col flex-grow">
+                        <h3 class="font-medium text-[#2B1B33] text-[10px] leading-tight line-clamp-2">${esc(p.name)}${expiryBadge(p)}</h3>
+                        <div class="mt-auto flex justify-between items-end pt-1">
+                            <span class="text-[#C81E5C] font-bold text-[11px]">${peso(price)}</span>
+                            <span class="text-[8px] ${out ? 'text-[#DC2626] font-semibold' : 'text-[#8A7690]'}">${out ? 'Out' : 'Qty:' + p.qty}</span>
+                        </div>
                     </div>
+                </div>
+                
+                <!-- Custom Tooltip -->
+                <div class="absolute bottom-[105%] left-1/2 -translate-x-1/2 mb-1 w-[140px] z-[999] bg-[#2B1B33] text-white text-[9px] p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+                    <div class="font-semibold mb-1 border-b border-gray-600 pb-1 text-[#FBF1F7] text-center">Price Breakdown</div>
+                    <div class="flex justify-between mt-1"><span>Cost:</span> <span>${peso(baseCost)}</span></div>
+                    <div class="flex justify-between mt-0.5"><span>Overhead:</span> <span>${peso(overheadPerUnit)}</span></div>
+                    <div class="flex justify-between mt-1 pt-1 border-t border-gray-600 text-[#4ADE80] font-bold"><span>Profit:</span> <span>${peso(profitAmount)}</span></div>
+                    <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#2B1B33]"></div>
                 </div>
             </div>`;
     }).join('');

@@ -94,6 +94,23 @@ begin
         v_sold  := (it->>'qty')::integer;
         v_price := coalesce((it->>'price')::numeric, 0);
 
+        if (it->>'id') is null then
+            v_name := it->>'name';
+            v_cost := coalesce((it->>'cost')::numeric, 0);
+            
+            insert into public.order_items (order_id, product_id, product_name, qty, unit_price, unit_cost, line_total)
+            values (v_id, null, v_name, v_sold, v_price, v_cost, round(v_sold * v_price, 2));
+
+            if p_type = 'regular' then
+                insert into public.stock_logs (product_id, product_name, action, qty_change, revenue, note)
+                values (null, v_name, 'Sold (Checkout)', -v_sold, round(v_sold * v_price, 2),
+                        'Order #' || left(v_id::text, 8) || coalesce(' · ' || v_cust, ''));
+            end if;
+
+            v_total := v_total + v_sold * v_price;
+            continue;
+        end if;
+
         select qty, name, cost into v_qty, v_name, v_cost
         from public.products where id = (it->>'id')::uuid
         for update;

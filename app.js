@@ -1260,17 +1260,17 @@ function filterPosCatalog() {
 function addToCartById(id) {
     const p = allProductsCache.find((x) => x.id === id);
     if (!p) { showToast('Product not found.', true); return; }
-    addToCart(p.id, p.name, getPrice(p, totalStockOf()), p.qty);
+    addToCart(p.id, p.name, getPrice(p, totalStockOf()), p.qty, Number(p.cost) || 0);
 }
 
-function addToCart(id, name, price, maxQty) {
+function addToCart(id, name, price, maxQty, cost = 0) {
     if (maxQty <= 0) { showToast('Out of stock!', true); return; }
     const item = cart.find((i) => i.id === id);
     if (item) {
         if (item.qty < maxQty) item.qty++;
         else { showToast('Max stock reached.', true); return; }
     } else {
-        cart.push({ id, name, price, qty: 1, maxQty });
+        cart.push({ id, name, price, qty: 1, maxQty, cost });
     }
     renderCart();
 }
@@ -1325,7 +1325,33 @@ function openCheckoutModal(evt) {
     $('checkoutCustomer').value = '';
     $('checkoutType').value = 'regular';
     $('checkoutPayment').value = 'paid';
+
+    const pkgs = setupData.packaging || [];
+    const addonsList = $('checkoutAddonsList');
+    if (!pkgs.length) {
+        addonsList.innerHTML = `<p class="text-[9px] text-[#B7A7BE]">No packaging configured in Setup.</p>`;
+    } else {
+        addonsList.innerHTML = pkgs.map((p, i) => {
+            const q = num(p.qty) > 0 ? num(p.qty) : 1;
+            const unitCost = num(p.cost) / q;
+            return `
+            <label class="flex justify-between items-center bg-white p-1.5 rounded border border-[#F2DCE8] cursor-pointer hover:bg-[#FFF9F2] transition">
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" class="checkout-addon-cb accent-[#C81E5C]" data-cost="${unitCost}" data-name="${esc(p.name)}" onchange="updateCheckoutGrandTotal()">
+                    <span class="text-[10px] font-medium text-[#2B1B33]">${esc(p.name)}</span>
+                </div>
+                <span class="text-[10px] text-[#C81E5C] font-bold">+${peso(unitCost)}</span>
+            </label>`;
+        }).join('');
+    }
+    updateCheckoutGrandTotal();
 }
+
+window.updateCheckoutGrandTotal = function() {
+    let total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    document.querySelectorAll('.checkout-addon-cb:checked').forEach(cb => { total += num(cb.dataset.cost); });
+    $('checkoutGrandTotal').innerText = peso(total);
+};
 
 function closeCheckoutModal() {
     $('checkoutModal').classList.add('hidden');
@@ -1340,7 +1366,16 @@ async function confirmCheckout(evt) {
     
     setButtonBusy(btn, true, 'Processing...');
     try {
-        const items = cart.map((i) => ({ id: i.id, qty: i.qty, price: i.price }));
+        const items = cart.map((i) => ({ id: i.id, name: i.name, qty: i.qty, price: i.price, cost: i.cost }));
+        document.querySelectorAll('.checkout-addon-cb:checked').forEach(cb => {
+            items.push({
+                id: null,
+                name: 'Add-on: ' + cb.dataset.name,
+                qty: 1,
+                price: num(cb.dataset.cost),
+                cost: num(cb.dataset.cost)
+            });
+        });
         await db.checkout(items, cust, type, paid);
         showToast('Checkout Complete!');
         clearCart();

@@ -146,8 +146,11 @@
                         </div>
                         <div class="grid grid-cols-3 gap-3">
                             <div>
-                                <label class="block font-medium text-[#6B5470] mb-1">Cost (₱)</label>
+                                <label class="block font-medium text-[#6B5470] mb-1" id="costLabel">Unit Cost (₱)</label>
                                 <input type="number" step="0.01" id="prodCost" required oninput="updateMarkupPreview()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                                <label class="flex items-center gap-1 mt-1 text-[9px] text-[#8A7690] cursor-pointer">
+                                    <input type="checkbox" id="isBulkCost" onchange="toggleBulkCostMode()" class="accent-[#C81E5C]"> Compute from Bulk Price
+                                </label>
                             </div>
                             <div>
                                 <div class="flex justify-between items-center mb-1">
@@ -158,7 +161,7 @@
                             </div>
                             <div>
                                 <label class="block font-medium text-[#6B5470] mb-1">Stock Qty</label>
-                                <input type="number" id="prodQty" required class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                                <input type="number" id="prodQty" required oninput="updateMarkupPreview()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
                             </div>
                         </div>
                         <div class="text-[10px] text-[#6B5470] bg-[#FFF9F2] p-2 rounded border border-[#F2DCE8]">

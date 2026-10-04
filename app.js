@@ -1076,8 +1076,18 @@ function clearSellingPrice() {
     updateMarkupPreview();
 }
 
+window.toggleBulkCostMode = function() {
+    const isBulk = $('isBulkCost').checked;
+    $('costLabel').innerText = isBulk ? 'Total Bulk Price (₱)' : 'Unit Cost (₱)';
+    updateMarkupPreview();
+};
+
 function updateMarkupPreview() {
-    const cost = num($('prodCost').value);
+    let cost = num($('prodCost').value);
+    if ($('isBulkCost') && $('isBulkCost').checked) {
+        const qty = num($('prodQty').value) || 1;
+        cost = cost / qty;
+    }
     const selling = num($('prodSellingPrice').value);
     const preview = $('markupPreviewText');
     const ts = totalStockOf();
@@ -1114,6 +1124,10 @@ function clearProductForm() {
     $('prodDate').value = ymd(new Date());
     $('prodSellingPrice').value = '';
     $('markupPreviewText').innerText = '-';
+    if ($('isBulkCost')) {
+        $('isBulkCost').checked = false;
+        $('costLabel').innerText = 'Unit Cost (₱)';
+    }
     resetExpiryUi();
     loadCategoryDropdowns();
 }
@@ -1125,7 +1139,8 @@ async function saveProduct(e) {
     const barcode = $('prodBarcode').value.trim();
     const name = $('prodName').value.trim();
     const qty = parseInt($('prodQty').value, 10);
-    const cost = num($('prodCost').value);
+    const rawCost = num($('prodCost').value);
+    const cost = ($('isBulkCost') && $('isBulkCost').checked) ? rawCost / (qty || 1) : rawCost;
     const expiryDate = computeExpiryDate();
 
     if (!name || !barcode) { showToast('Name and barcode are required.', true); return; }

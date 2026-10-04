@@ -113,11 +113,11 @@ const localDb = {
     async getLogs(productId) {
         return LS.get('bizstore_logs', []).filter((l) => l.productId === productId).sort((a, b) => b.timestamp - a.timestamp);
     },
-    async getSalesLogs(from, to) {
+    async getFinancialLogs(from, to) {
         const f = from.getTime(), t = to.getTime();
         return LS.get('bizstore_logs', [])
-            .filter((l) => l.action === SOLD_ACTION && l.timestamp >= f && l.timestamp < t)
-            .map((l) => ({ timestamp: l.timestamp, revenue: revenueOf(l) }));
+            .filter((l) => (l.action === SOLD_ACTION || l.action.includes('(In)')) && l.timestamp >= f && l.timestamp < t)
+            .map((l) => ({ timestamp: l.timestamp, action: l.action, revenue: revenueOf(l) || 0, qtyChange: l.qtyChange || 0, productId: l.productId }));
     },
 
     async getSetup(month) {
@@ -236,10 +236,11 @@ function createSupabaseDb() {
             const rows = check(await sb.from('stock_logs').select('*').eq('product_id', productId).order('created_at', { ascending: false }).limit(500));
             return rows.map((r) => ({ action: r.action, qtyChange: r.qty_change, revenue: Number(r.revenue), note: r.note, timestamp: new Date(r.created_at).getTime() }));
         },
-        async getSalesLogs(from, to) {
-            const rows = await fetchAll(() => sb.from('stock_logs').select('created_at, revenue')
-                .eq('action', SOLD_ACTION).gte('created_at', from.toISOString()).lt('created_at', to.toISOString()).order('created_at'));
-            return rows.map((r) => ({ timestamp: new Date(r.created_at).getTime(), revenue: Number(r.revenue) || 0 }));
+        async getFinancialLogs(from, to) {
+            const rows = await fetchAll(() => sb.from('stock_logs').select('created_at, action, revenue, qty_change, product_id')
+                .in('action', [SOLD_ACTION, 'Initial Stock In', 'Stock Adjustment (In)'])
+                .gte('created_at', from.toISOString()).lt('created_at', to.toISOString()).order('created_at'));
+            return rows.map((r) => ({ timestamp: new Date(r.created_at).getTime(), action: r.action, revenue: Number(r.revenue) || 0, qtyChange: r.qty_change, productId: r.product_id }));
         },
 
         async getSetup(month) {
@@ -483,50 +484,71 @@ async function loadFinancials() {
     const reqId = ++financialReqId;
     const { mode, key, start, end } = getFinancialRange();
 
-    let sales = [];
+    let logs = [];
     try {
-        sales = await db.getSalesLogs(start, end);
+        logs = await db.getFinancialLogs(start, end);
     } catch (err) {
-        showToast('Hindi ma-load ang sales: ' + err.message, true);
+        showToast('Hindi ma-load ang logs: ' + err.message, true);
     }
-    if (reqId !== financialReqId) return; // may mas bagong request na
+    if (reqId !== financialReqId) return;
 
     const monthlyExpense = monthlyTotals(setupData).total;
     const labels = [], revenues = [], expenses = [];
     let totalRevenue = 0, totalExpenses = 0;
 
+    const getPurchaseCost = (l) => {
+        if (!l.action.includes('(In)')) return 0;
+        const p = allProductsCache.find((x) => x.id === l.productId);
+        return (l.qtyChange > 0 ? l.qtyChange : 0) * (p ? Number(p.cost) : 0);
+    };
+
     if (mode === 'daily') {
-        const buckets = {};
-        sales.forEach((s) => { const k = ymd(new Date(s.timestamp)); buckets[k] = (buckets[k] || 0) + s.revenue; });
+        const revBuckets = {};
+        const expBuckets = {};
+        logs.forEach((l) => { 
+            const k = ymd(new Date(l.timestamp)); 
+            if (l.action === SOLD_ACTION) revBuckets[k] = (revBuckets[k] || 0) + l.revenue;
+            else expBuckets[k] = (expBuckets[k] || 0) + getPurchaseCost(l);
+        });
         for (let i = 0; i < 7; i++) {
             const d = new Date(start); d.setDate(start.getDate() + i);
             const k = ymd(d);
             labels.push(k.slice(5));
-            revenues.push(buckets[k] || 0);
-            expenses.push(monthlyExpense / 30);
+            revenues.push(revBuckets[k] || 0);
+            expenses.push((monthlyExpense / 30) + (expBuckets[k] || 0));
         }
-        totalRevenue = buckets[key] || 0;
-        totalExpenses = monthlyExpense / 30;
+        totalRevenue = revBuckets[key] || 0;
+        totalExpenses = (monthlyExpense / 30) + (expBuckets[key] || 0);
     } else if (mode === 'monthly') {
         const [y, m] = key.split('-').map(Number);
         const days = new Date(y, m, 0).getDate();
-        const buckets = new Array(days).fill(0);
-        sales.forEach((s) => { buckets[new Date(s.timestamp).getDate() - 1] += s.revenue; });
+        const revBuckets = new Array(days).fill(0);
+        const expBuckets = new Array(days).fill(0);
+        logs.forEach((l) => {
+            const idx = new Date(l.timestamp).getDate() - 1;
+            if (l.action === SOLD_ACTION) revBuckets[idx] += l.revenue;
+            else expBuckets[idx] += getPurchaseCost(l);
+        });
         for (let d = 1; d <= days; d++) {
             labels.push(String(d));
-            revenues.push(buckets[d - 1]);
-            expenses.push(monthlyExpense / days);
+            revenues.push(revBuckets[d - 1]);
+            expenses.push((monthlyExpense / days) + expBuckets[d - 1]);
         }
-        totalRevenue = sum(buckets);
-        totalExpenses = monthlyExpense;
+        totalRevenue = sum(revBuckets);
+        totalExpenses = monthlyExpense + sum(expBuckets);
     } else {
-        const buckets = new Array(12).fill(0);
-        sales.forEach((s) => { buckets[new Date(s.timestamp).getMonth()] += s.revenue; });
+        const revBuckets = new Array(12).fill(0);
+        const expBuckets = new Array(12).fill(0);
+        logs.forEach((l) => { 
+            const idx = new Date(l.timestamp).getMonth();
+            if (l.action === SOLD_ACTION) revBuckets[idx] += l.revenue;
+            else expBuckets[idx] += getPurchaseCost(l);
+        });
         labels.push('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec');
-        revenues.push(...buckets);
-        expenses.push(...new Array(12).fill(monthlyExpense));
-        totalRevenue = sum(buckets);
-        totalExpenses = monthlyExpense * 12;
+        revenues.push(...revBuckets);
+        expenses.push(...expBuckets.map(e => monthlyExpense + e));
+        totalRevenue = sum(revBuckets);
+        totalExpenses = (monthlyExpense * 12) + sum(expBuckets);
     }
 
     const netProfit = totalRevenue - totalExpenses;

@@ -43,6 +43,7 @@ function normalizeSetup(s) {
     });
     out.rent = num(out.rent);
     out.targetProfitPercent = out.targetProfitPercent === undefined || out.targetProfitPercent === null ? 30 : num(out.targetProfitPercent);
+    out.expectedMonthlyVolume = num(out.expectedMonthlyVolume) || 100;
     return out;
 }
 
@@ -426,7 +427,8 @@ async function removeCategory(name) {
 function getPrice(p, totalStock) {
     if (p.sellingPrice && p.sellingPrice > 0) return p.sellingPrice;
     const cfg = normalizeSetup(savedMonthConfig || setupData);
-    const overheadPerUnit = monthlyTotals(cfg).total / (totalStock > 0 ? totalStock : 1);
+    const vol = cfg.expectedMonthlyVolume > 0 ? cfg.expectedMonthlyVolume : 100;
+    const overheadPerUnit = monthlyTotals(cfg).total / vol;
     return (Number(p.cost) + overheadPerUnit) * (1 + cfg.targetProfitPercent / 100);
 }
 const totalStockOf = (list) => (list || allProductsCache).reduce((s, p) => s + (p.qty || 0), 0);
@@ -1090,9 +1092,9 @@ function updateMarkupPreview() {
     }
     const selling = num($('prodSellingPrice').value);
     const preview = $('markupPreviewText');
-    const ts = totalStockOf();
     const cfg = normalizeSetup(savedMonthConfig || setupData);
-    const overheadPerUnit = monthlyTotals(cfg).total / (ts > 0 ? ts : 1);
+    const vol = cfg.expectedMonthlyVolume > 0 ? cfg.expectedMonthlyVolume : 100;
+    const overheadPerUnit = monthlyTotals(cfg).total / vol;
     
     if (selling > 0) {
         const profit = selling - cost - overheadPerUnit;

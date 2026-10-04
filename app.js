@@ -467,6 +467,7 @@ async function loadSetupConfigToUi() {
     $('setupTargetProfitPercent').value = setupData.targetProfitPercent;
     renderEmployeesTable();
     ['subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc', 'supplies'].forEach((k) => renderDynamicList(k, setupData[k]));
+    renderComboList();
     calculateTotalExpenses();
 
     if (!$('financialTimePickerContainer').innerHTML.trim()) toggleFinancialViewMode();
@@ -853,6 +854,7 @@ async function clearSetup() {
         $('setupExpectedMonthlyVolume').value = 100;
         renderEmployeesTable();
         ['subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc', 'supplies'].forEach((k) => renderDynamicList(k, setupData[k]));
+        renderComboList();
         calculateTotalExpenses();
         loadFinancials();
         showToast('Setup cleared.');
@@ -874,6 +876,99 @@ async function saveSetupConfig(evt) {
     } finally {
         setButtonBusy(btn, false);
     }
+}
+
+/* ---------------------------------------------------------
+   PACKAGE DEALS / COMBOS
+--------------------------------------------------------- */
+function renderComboList() {
+    const list = $('comboList');
+    if (!setupData.combos || !setupData.combos.length) {
+        list.innerHTML = `<p class="text-[10px] text-[#B7A7BE]">No combos added.</p>`;
+        return;
+    }
+    list.innerHTML = setupData.combos.map((c, i) => {
+        const itemNames = c.items.map(id => {
+            const p = allProductsCache.find(x => x.id === id);
+            return p ? p.name : 'Unknown Item';
+        }).join(' + ');
+        return `
+        <div class="bg-white p-2 rounded-xl border border-[#F2DCE8] flex justify-between items-center">
+            <div>
+                <p class="font-bold text-[#2B1B33] text-[11px]">${esc(c.name)}</p>
+                <p class="text-[9px] text-[#8A7690] mt-0.5">${esc(itemNames)}</p>
+                <p class="text-[10px] font-bold text-[#1F9D55] mt-1">Package Price: ₱${num(c.price).toFixed(2)}</p>
+            </div>
+            <div class="flex gap-2">
+                <button type="button" onclick="openComboModal(${i})" class="text-[#C81E5C] font-semibold text-[10px] hover:underline">Edit</button>
+                <button type="button" onclick="deleteCombo(${i})" class="text-[#DC2626] font-semibold text-[10px] hover:underline">Delete</button>
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
+function openComboModal(index = null) {
+    const isEdit = index !== null;
+    const combo = isEdit ? setupData.combos[index] : null;
+    $('comboEditId').value = isEdit ? index : '';
+    $('comboName').value = combo ? combo.name : '';
+    $('comboPrice').value = combo ? combo.price : '';
+    
+    const productsHtml = allProductsCache.map(p => {
+        const isChecked = combo && combo.items.includes(p.id) ? 'checked' : '';
+        return `
+        <label class="flex items-center gap-2 text-[11px] p-1.5 hover:bg-[#FBF1F7] rounded cursor-pointer transition">
+            <input type="checkbox" value="${p.id}" class="combo-item-checkbox accent-[#C81E5C]" ${isChecked}>
+            <span class="font-medium text-[#2B1B33]">${esc(p.name)}</span>
+            <span class="text-[#8A7690] ml-auto">₱${num(getPrice(p, null)).toFixed(2)}</span>
+        </label>
+        `;
+    }).join('');
+    $('comboProductsList').innerHTML = productsHtml || '<p class="text-[10px] text-center text-[#B7A7BE] py-2">No products available in inventory.</p>';
+    
+    $('comboModal').classList.remove('hidden');
+}
+
+function closeComboModal() {
+    $('comboModal').classList.add('hidden');
+}
+
+function saveCombo() {
+    const name = $('comboName').value.trim();
+    const price = num($('comboPrice').value);
+    if (!name || price <= 0) {
+        showToast('Please enter a valid combo name and price.', true);
+        return;
+    }
+    const checkboxes = document.querySelectorAll('.combo-item-checkbox:checked');
+    const items = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (items.length < 2) {
+        showToast('Please select at least 2 items for a combo.', true);
+        return;
+    }
+
+    const editIdx = $('comboEditId').value;
+    const newCombo = { name, items, price };
+
+    if (!setupData.combos) setupData.combos = [];
+    if (editIdx !== '') {
+        setupData.combos[parseInt(editIdx, 10)] = newCombo;
+    } else {
+        setupData.combos.push(newCombo);
+    }
+    
+    renderComboList();
+    closeComboModal();
+    saveSetupConfig();
+}
+
+function deleteCombo(index) {
+    if (!confirm('Delete this combo?')) return;
+    setupData.combos.splice(index, 1);
+    renderComboList();
+    saveSetupConfig();
 }
 
 /* ---------------------------------------------------------
@@ -1415,10 +1510,67 @@ function openCheckoutModal(evt) {
     updateCheckoutGrandTotal();
 }
 
+window.currentAutoDiscount = 0;
+window.currentAutoDiscountName = '';
+
 window.updateCheckoutGrandTotal = function() {
     let total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-    const discount = num($('checkoutDiscount').value);
-    total -= discount;
+    
+    // Auto-Discounts from Combos
+    window.currentAutoDiscount = 0;
+    window.currentAutoDiscountName = '';
+    
+    if (setupData.combos && setupData.combos.length > 0) {
+        // Deep copy cart qty to safely deduct
+        const cartQty = {};
+        cart.forEach(c => cartQty[c.id] = c.qty);
+        
+        setupData.combos.forEach(combo => {
+            let possibleCombos = Infinity;
+            combo.items.forEach(reqId => {
+                const available = cartQty[reqId] || 0;
+                if (available < possibleCombos) possibleCombos = available;
+            });
+            
+            if (possibleCombos > 0 && possibleCombos !== Infinity) {
+                // Deduct from cartQty so it's not reused
+                combo.items.forEach(reqId => cartQty[reqId] -= possibleCombos);
+                
+                // Regular price sum
+                const regularPrice = combo.items.reduce((sum, id) => {
+                    const cartItem = cart.find(c => c.id === id);
+                    return sum + (cartItem ? cartItem.price : 0);
+                }, 0);
+                
+                const discountPerCombo = regularPrice - combo.price;
+                if (discountPerCombo > 0) {
+                    window.currentAutoDiscount += (discountPerCombo * possibleCombos);
+                    if (window.currentAutoDiscountName) window.currentAutoDiscountName += ' + ';
+                    window.currentAutoDiscountName += `${combo.name} (${possibleCombos}x)`;
+                }
+            }
+        });
+    }
+
+    const adDisplay = $('checkoutAutoDiscountDisplay');
+    if (window.currentAutoDiscount > 0) {
+        total -= window.currentAutoDiscount;
+        adDisplay.innerText = `Package Auto-Discount: -${peso(window.currentAutoDiscount)}`;
+        adDisplay.classList.remove('hidden');
+    } else {
+        adDisplay.classList.add('hidden');
+    }
+
+    // Add-ons
+    document.querySelectorAll('.checkout-addon-cb:checked').forEach(cb => {
+        // Add-ons don't increase customer total visually here, based on previous logic?
+        // Wait, the previous logic explicitly didn't add it to customer total visually
+        // "0 price so it doesn't increase customer total"
+    });
+
+    const manualDiscount = num($('checkoutDiscount').value);
+    total -= manualDiscount;
+    
     $('checkoutGrandTotal').innerText = peso(Math.max(0, total));
 };
 
@@ -1442,18 +1594,28 @@ async function confirmCheckout(evt) {
                 id: null,
                 name: 'Add-on: ' + cb.dataset.name,
                 qty: 1,
-                price: 0, // 0 price so it doesn't increase customer total
-                cost: num(cb.dataset.cost) // retains cost to reduce profit
+                price: 0, 
+                cost: num(cb.dataset.cost)
             });
         });
 
-        const discount = num($('checkoutDiscount').value);
-        if (discount > 0) {
+        if (window.currentAutoDiscount > 0) {
+            items.push({
+                id: null,
+                name: 'Combo Deal: ' + window.currentAutoDiscountName,
+                qty: 1,
+                price: -window.currentAutoDiscount,
+                cost: 0
+            });
+        }
+
+        const manualDiscount = num($('checkoutDiscount').value);
+        if (manualDiscount > 0) {
             items.push({
                 id: null,
                 name: 'Discount',
                 qty: 1,
-                price: -discount, // reduces customer total
+                price: -manualDiscount,
                 cost: 0
             });
         }

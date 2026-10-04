@@ -608,13 +608,50 @@ function renderDynamicList(key, items) {
         container.innerHTML = `<p class="text-[10px] text-[#B7A7BE]">No items.</p>`;
         return;
     }
-    container.innerHTML = items.map((item, i) => `
-        <div class="flex gap-1.5 items-center bg-white p-1.5 rounded-lg border border-[#F2DCE8]">
+    
+    let productOptions = '';
+    if (key === 'supplies') {
+        productOptions = allProductsCache.map(p => `<option value="${p.id}">${esc(p.name)} (₱${p.cost})</option>`).join('');
+    }
+
+    container.innerHTML = items.map((item, i) => {
+        if (key === 'supplies') {
+            return `
+            <div class="flex flex-col gap-1 bg-white p-1.5 rounded-lg border border-[#F2DCE8] mb-1.5">
+                <div class="flex gap-1.5 items-center">
+                    <select onchange="handleSupplySelect(this, ${i})" class="flex-grow px-2 py-1 text-[10px] outline-none border border-[#F2DCE8] rounded bg-[#FFF9F2] text-[#6B5470]">
+                        <option value="">-- Select from Inventory or Type Below --</option>
+                        ${productOptions}
+                    </select>
+                    <button type="button" onclick="removeDynamicItem('${key}', ${i})" class="text-[#DC2626] px-1 font-bold">×</button>
+                </div>
+                <div class="flex gap-1.5 items-center">
+                    <input type="text" value="${esc(item.name)}" oninput="updateDynamicItem('${key}', ${i}, 'name', this.value)" placeholder="Custom Supply Name" class="flex-grow min-w-0 px-2 py-1 text-[11px] outline-none">
+                    <input type="number" value="${esc(item.cost)}" oninput="updateDynamicItem('${key}', ${i}, 'cost', this.value)" placeholder="Cost" class="w-20 px-2 py-1 text-[11px] outline-none text-right font-medium text-[#C81E5C]">
+                </div>
+            </div>`;
+        }
+
+        return `
+        <div class="flex gap-1.5 items-center bg-white p-1.5 rounded-lg border border-[#F2DCE8] mb-1.5">
             <input type="text" value="${esc(item.name)}" oninput="updateDynamicItem('${key}', ${i}, 'name', this.value)" placeholder="Name" class="flex-grow min-w-0 px-2 py-1 text-[11px] outline-none">
             <input type="number" value="${esc(item.cost)}" oninput="updateDynamicItem('${key}', ${i}, 'cost', this.value)" placeholder="Cost" class="w-20 px-2 py-1 text-[11px] outline-none text-right font-medium text-[#C81E5C]">
             <button type="button" onclick="removeDynamicItem('${key}', ${i})" class="text-[#DC2626] px-1 font-bold">×</button>
-        </div>`).join('');
+        </div>`;
+    }).join('');
 }
+
+window.handleSupplySelect = function(sel, idx) {
+    const pId = sel.value;
+    if (!pId) return;
+    const p = allProductsCache.find(x => x.id === pId);
+    if (p) {
+        setupData.supplies[idx].name = p.name;
+        setupData.supplies[idx].cost = p.cost;
+        renderDynamicList('supplies', setupData.supplies);
+        calculateTotalExpenses();
+    }
+};
 
 function addDynamicItem(key) {
     if (!setupData[key]) setupData[key] = [];

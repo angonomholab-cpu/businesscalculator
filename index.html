@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BizStore PH - POS & Inventory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style> 
+        body { font-family: 'Poppins', sans-serif; overflow: hidden; } 
+        .logo-font { font-family: 'Baloo 2', cursive; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-thumb { background-color: #E6C9DC; border-radius: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        .main-height { height: calc(100vh - 64px); overflow-y: auto; }
+        #toastNotif.toast-error #toastIcon { background-color: #FDE3E3 !important; color: #C81E1E !important; }
+        #toastNotif.toast-error { border-color: #F8C9C9; }
+        @media print {
+            body * { visibility: hidden; }
+            #payslipPrintArea, #payslipPrintArea * { visibility: visible; }
+            #payslipPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-[#FFF9F2] text-[#2B1B33] flex flex-col h-screen">
+
+    <header class="bg-white/90 backdrop-blur-md border-b border-[#F2DCE8] h-[64px] flex-shrink-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
+            <h1 class="logo-font flex items-baseline gap-1.5 select-none">
+                <span class="text-2xl font-extrabold tracking-tight text-[#2B1B33]">Biz<span class="text-[#C81E5C]">Store</span></span>
+                <span class="bg-[#FFB800] text-[#2B1B33] text-[10px] font-extrabold px-1.5 py-0.5 rounded-md -rotate-3 shadow-sm">PH</span>
+            </h1>
+            <nav class="flex space-x-2">
+                <button onclick="switchTab('pos')" id="nav-pos" class="px-4 py-1.5 rounded-full text-xs font-medium bg-[#C81E5C] text-white shadow-sm transition">My Store</button>
+                <button onclick="switchTab('input')" id="nav-input" class="px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition">Add / Edit</button>
+                <button onclick="switchTab('inventory')" id="nav-inventory" class="px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition">Inventory</button>
+                <button onclick="switchTab('setup')" id="nav-setup" class="px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition">Setup & Financials</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Toast Notification -->
+    <div id="toastNotif" class="fixed top-20 right-5 transform translate-x-full opacity-0 transition-all duration-300 bg-white border border-[#F2DCE8] shadow-lg rounded-xl px-4 py-3 flex items-center gap-3 z-50">
+        <div id="toastIcon" class="w-6 h-6 rounded-full bg-[#E3F6EA] flex items-center justify-center text-[#1F9D55] font-bold text-xs">✓</div>
+        <p id="toastMessage" class="text-xs font-medium text-[#2B1B33]">Action successful!</p>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 py-4 w-full main-height">
+
+        <!-- TAB 1: POS -->
+        <section id="tab-pos" class="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+            <div class="lg:col-span-2 bg-white p-4 rounded-2xl shadow-sm border border-[#F2DCE8] flex flex-col h-full">
+                <div class="flex justify-between items-center gap-3 mb-3 shrink-0">
+                    <div id="posCategoryFilters" class="flex gap-2 overflow-x-auto w-full pb-1 text-xs"></div>
+                    <div class="flex gap-2 items-center">
+                        <input type="text" id="posSearch" onkeyup="filterPosCatalog()" placeholder="Search..." class="px-4 py-1.5 border border-[#F2DCE8] rounded-full text-xs outline-none w-40 bg-[#FFF9F2]">
+                        <button onclick="openPosScannerModal()" class="flex items-center justify-center w-8 h-8 bg-[#FBF1F7] text-[#C81E5C] rounded-full hover:bg-[#F2DCE8] border border-[#F2DCE8]" title="Scan Barcode">📷</button>
+                    </div>
+                </div>
+                <div id="posCatalogGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 overflow-y-auto pr-1 flex-grow content-start"></div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-[#F2DCE8] flex flex-col h-full">
+                <div class="flex justify-between items-center mb-2 pb-2 border-b border-[#F2DCE8] shrink-0">
+                    <h2 class="text-xs font-semibold uppercase tracking-widest text-[#8A7690]">🛒 Cart</h2>
+                    <button onclick="clearCart()" class="text-[10px] text-[#DC2626] hover:underline font-medium">Clear All</button>
+                </div>
+                <div id="cartList" class="flex-grow overflow-y-auto space-y-2 pr-1 text-xs"></div>
+                <div class="border-t border-[#F2DCE8] pt-3 mt-2 shrink-0">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-xs font-medium text-[#6B5470]">Total:</span>
+                        <span class="text-lg font-bold text-[#2B1B33]">₱<span id="cartTotalPrice">0.00</span></span>
+                    </div>
+                    <button onclick="checkoutOrder()" class="w-full bg-[#FFB800] text-[#2B1B33] py-2.5 rounded-xl text-xs font-bold hover:bg-[#F0AC00] transition shadow-sm">Checkout</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: ADD / EDIT PRODUCT -->
+        <section id="tab-input" class="hidden h-full">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-[#F2DCE8] max-w-2xl mx-auto flex flex-col h-full">
+                <div class="flex justify-between items-center mb-3 shrink-0">
+                    <h2 id="formTitle" class="text-sm font-semibold text-[#2B1B33]">✨ Add New Product</h2>
+                    <button onclick="clearProductForm()" class="text-xs text-[#8A7690] hover:text-[#2B1B33] font-medium px-3 py-1 bg-[#FBF1F7] rounded-lg">Clear Form</button>
+                </div>
+                
+                <div class="overflow-y-auto pr-2 flex-grow">
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="p-3 bg-[#FFF9F2] rounded-xl border border-[#F2DCE8]">
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-[10px] font-medium text-[#6B5470]">Barcode Scanner</label>
+                                <span id="scannerStatus" class="text-[9px] text-[#8A7690]"></span>
+                            </div>
+                            <div id="reader" class="mb-2 rounded-lg overflow-hidden bg-black h-36 border border-[#E6C9DC]"></div>
+                            <div class="flex gap-1">
+                                <button type="button" onclick="startAddScanner()" class="flex-1 bg-[#C81E5C] text-white py-1 rounded text-[10px]">Start</button>
+                                <button type="button" onclick="stopScanner()" class="bg-[#DC2626] text-white px-2 py-1 rounded text-[10px]">Stop</button>
+                            </div>
+                        </div>
+                        <div class="p-3 bg-[#FFF9F2] rounded-xl border border-[#F2DCE8] text-center flex flex-col justify-between">
+                            <label class="block text-[10px] font-medium text-[#6B5470] mb-1">Product Photo</label>
+                            <div class="relative w-16 h-16 mx-auto bg-white rounded-lg overflow-hidden border border-[#F2DCE8] flex items-center justify-center shadow-sm">
+                                <video id="snapshotVideo" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+                                <canvas id="snapshotCanvas" class="hidden"></canvas>
+                                <img id="snapshotPreview" class="w-full h-full object-cover hidden">
+                                <span id="camPlaceholder" class="text-[9px] text-[#B7A7BE] absolute">No Photo</span>
+                            </div>
+                            <div class="flex justify-center gap-1 mt-2">
+                                <button type="button" onclick="startSnapshotCamera()" class="bg-[#8A7690] text-white px-2 py-1 rounded text-[10px]">Open</button>
+                                <button type="button" onclick="takeSnapshot()" class="bg-[#2B1B33] text-white px-2 py-1 rounded text-[10px]">Capture</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form id="productForm" onsubmit="saveProduct(event)" class="space-y-3 text-xs">
+                        <input type="hidden" id="editProductId">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-medium text-[#6B5470] mb-1">Category</label>
+                                <div class="flex gap-1">
+                                    <select id="prodCategory" required class="flex-grow px-3 py-2 border border-[#F2DCE8] rounded-lg bg-white outline-none"></select>
+                                    <button type="button" onclick="openCategoryModal()" class="px-2 bg-[#FBF1F7] text-[#6B5470] rounded-lg border border-[#F2DCE8] hover:bg-[#F6D9EA]">⚙️</button>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block font-medium text-[#6B5470]">Barcode</label>
+                                    <div class="flex gap-2">
+                                        <button type="button" onclick="generateAutoBarcode()" class="text-[9px] text-[#C81E5C] hover:underline">Gen</button>
+                                        <button type="button" onclick="downloadBarcodeSticker()" class="text-[9px] text-[#1F9D55] hover:underline font-bold">Sticker</button>
+                                    </div>
+                                </div>
+                                <input type="text" id="prodBarcode" required class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block font-medium text-[#6B5470] mb-1">Product Name</label>
+                            <input type="text" id="prodName" required class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-medium text-[#6B5470] mb-1">Cost / Base Price (₱)</label>
+                                <input type="number" step="0.01" id="prodCost" required class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                            </div>
+                            <div>
+                                <label class="block font-medium text-[#6B5470] mb-1">Stock Qty</label>
+                                <input type="number" id="prodQty" required class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-medium text-[#6B5470] mb-1">Stock-In</label>
+                                <input type="date" id="prodDate" required onchange="updateComputedExpiry()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                            </div>
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block font-medium text-[#6B5470]">Expiry</label>
+                                    <div class="flex gap-2 text-[9px] text-[#6B5470]">
+                                        <label class="flex items-center gap-0.5 cursor-pointer"><input type="radio" name="expiryMode" value="date" checked onchange="toggleExpiryMode()"> Date</label>
+                                        <label class="flex items-center gap-0.5 cursor-pointer"><input type="radio" name="expiryMode" value="months" onchange="toggleExpiryMode()"> Months</label>
+                                    </div>
+                                </div>
+                                <input type="date" id="prodExpiryDate" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                                <div id="expiryMonthsWrap" class="hidden">
+                                    <input type="number" min="1" id="prodExpiryMonths" placeholder="e.g. 6" oninput="updateComputedExpiry()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                                    <p class="text-[9px] text-[#8A7690] mt-1">Computed: <span id="computedExpiryDisplay" class="font-medium text-[#2B1B33]">-</span></p>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" id="submitBtn" class="w-full bg-[#C81E5C] text-white py-2.5 rounded-xl font-semibold hover:bg-[#A61650] transition mt-2">Save Product</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: INVENTORY -->
+        <section id="tab-inventory" class="hidden h-full">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-[#F2DCE8] h-full flex flex-col">
+                <div class="flex justify-between items-center gap-3 mb-3 shrink-0">
+                    <div id="inventoryCategoryFilters" class="flex gap-2 overflow-x-auto w-full pb-1 text-xs"></div>
+                    <input type="text" id="searchInventory" onkeyup="filterInventory()" placeholder="Search..." class="px-3 py-1.5 border border-[#F2DCE8] rounded-full text-xs outline-none w-48 bg-[#FFF9F2]">
+                </div>
+                <div class="overflow-y-auto flex-grow">
+                    <table class="w-full text-left text-xs whitespace-nowrap">
+                        <thead class="sticky top-0 bg-white z-10">
+                            <tr class="border-b border-[#F2DCE8] text-[#8A7690] font-medium">
+                                <th class="py-2 px-2">Item</th>
+                                <th class="py-2 px-2">Category</th>
+                                <th class="py-2 px-2">Computed Price</th>
+                                <th class="py-2 px-2">Stock</th>
+                                <th class="py-2 px-2 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody" class="divide-y divide-[#FBF1F7]"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: SETUP & FINANCIAL MONITOR -->
+        <section id="tab-setup" class="hidden h-full">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-[#F2DCE8] max-w-4xl mx-auto text-xs h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4 shrink-0 pb-3 border-b border-[#F2DCE8]">
+                    <div>
+                        <h2 class="text-sm font-bold text-[#2B1B33]">⚙️ Business Configuration & Financial Monitor</h2>
+                        <p class="text-[10px] text-[#8A7690]">Track daily, monthly, or annual financial performance and profitability with visual charts.</p>
+                    </div>
+                </div>
+                
+                <div class="flex-grow overflow-y-auto pr-2 space-y-5">
+                    
+                    <!-- FINANCIAL P&L DASHBOARD WITH DAILY / MONTHLY / ANNUAL VIEWS & CHART -->
+                    <div class="p-4 bg-[#FFF9F2] rounded-2xl border border-[#F2DCE8]">
+                        <div class="flex flex-wrap justify-between items-center mb-3 gap-2">
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-[#2B1B33] text-xs">📊 Profit & Loss Monitor & Chart</h3>
+                                <select id="financialViewMode" onchange="toggleFinancialViewMode()" class="px-2.5 py-1 border border-[#F2DCE8] rounded-lg bg-white font-medium text-xs outline-none">
+                                    <option value="daily">Daily View</option>
+                                    <option value="monthly" selected>Monthly View</option>
+                                    <option value="annual">Annual View</option>
+                                </select>
+                            </div>
+                            <div id="financialTimePickerContainer" class="flex items-center gap-2">
+                                <!-- Dynamic time picker -->
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                            <div class="bg-white p-3 rounded-xl border border-[#F2DCE8] text-center">
+                                <p class="text-[10px] text-[#8A7690]">Total Revenue</p>
+                                <p class="text-base font-bold text-[#1F9D55]" id="metricRevenue">₱0.00</p>
+                            </div>
+                            <div class="bg-white p-3 rounded-xl border border-[#F2DCE8] text-center">
+                                <p class="text-[10px] text-[#8A7690]">Total Expenses</p>
+                                <p class="text-base font-bold text-[#DC2626]" id="metricExpenses">₱0.00</p>
+                            </div>
+                            <div class="bg-white p-3 rounded-xl border border-[#F2DCE8] text-center">
+                                <p class="text-[10px] text-[#8A7690]">Net Profit / Loss</p>
+                                <p class="text-base font-bold text-[#2B1B33]" id="metricNetProfit">₱0.00</p>
+                            </div>
+                            <div class="bg-white p-3 rounded-xl border border-[#F2DCE8] text-center">
+                                <p class="text-[10px] text-[#8A7690]">Profit Margin</p>
+                                <p class="text-base font-bold text-[#C81E5C]" id="metricMargin">0.0%</p>
+                            </div>
+                        </div>
+
+                        <!-- VISUAL CHART CONTAINER -->
+                        <div class="bg-white p-3 rounded-xl border border-[#F2DCE8] mb-3">
+                            <div style="height: 200px; width: 100%;">
+                                <canvas id="financialChart"></canvas>
+                            </div>
+                        </div>
+
+                        <p class="text-[10px] text-[#8A7690] italic" id="financialAdvice">Tip: Check annual performance to see your strongest and weakest months.</p>
+                    </div>
+
+                    <!-- SECTION A: FIXED EXPENSES -->
+                    <div class="p-4 bg-[#FFF9F2] rounded-2xl border border-[#F2DCE8]">
+                        <h3 class="font-bold text-[#2B1B33] text-xs mb-3 flex items-center justify-between">
+                            <span>🏢 Fixed Expenses (Standard Monthly)</span>
+                            <span class="text-[#C81E5C] text-[11px]" id="totalFixedHeaderDisplay">Total: ₱0.00</span>
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block font-medium text-[#6B5470] mb-1">Monthly Rent / Renta sa Pwesto (₱)</label>
+                                <input type="number" id="setupRent" oninput="calculateTotalExpenses()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg bg-white outline-none">
+                            </div>
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block font-medium text-[#6B5470]">Subscriptions & Software (Internet, POS, etc.)</label>
+                                    <button type="button" onclick="addDynamicItem('subscriptions')" class="text-[9px] text-[#C81E5C] font-bold hover:underline">+ Add Item</button>
+                                </div>
+                                <div id="subscriptionsList" class="space-y-1.5 max-h-32 overflow-y-auto pr-1"></div>
+                            </div>
+                        </div>
+
+                        <!-- Employees & Payroll -->
+                        <div class="mt-4 pt-3 border-t border-[#F2DCE8]">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block font-bold text-[#6B5470]">👥 Employees & Payroll (Sahod & Gov't Benefits)</label>
+                                <button type="button" onclick="openEmployeeModal()" class="bg-[#C81E5C] text-white px-2.5 py-1 rounded-lg text-[10px] font-semibold">+ Add Employee</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-[11px] bg-white rounded-lg border border-[#F2DCE8]">
+                                    <thead>
+                                        <tr class="bg-[#FBF1F7] text-[#8A7690] border-b border-[#F2DCE8]">
+                                            <th class="py-1.5 px-2">Name</th>
+                                            <th class="py-1.5 px-2">Basic</th>
+                                            <th class="py-1.5 px-2">SSS/Phil/PagIBIG</th>
+                                            <th class="py-1.5 px-2">Tax</th>
+                                            <th class="py-1.5 px-2 font-bold text-[#2B1B33]">Net Pay</th>
+                                            <th class="py-1.5 px-2 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="employeeTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION B: VARIABLE & OVERHEAD EXPENSES -->
+                    <div class="p-4 bg-[#FFF9F2] rounded-2xl border border-[#F2DCE8]">
+                        <h3 class="font-bold text-[#2B1B33] text-xs mb-3 flex items-center justify-between">
+                            <span>📦 Variable Expenses & Overhead (Fluctuates per Month)</span>
+                            <span class="text-[#C81E5C] text-[11px]" id="totalVariableHeaderDisplay">Total: ₱0.00</span>
+                        </h3>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-white p-3 rounded-xl border border-[#F2DCE8]">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block font-medium text-[#6B5470]">Utilities (Kuryente, Tubig, etc.)</label>
+                                    <button type="button" onclick="addDynamicItem('utilities')" class="text-[9px] text-[#C81E5C] font-bold hover:underline">+ Add Utility</button>
+                                </div>
+                                <div id="utilitiesList" class="space-y-1.5 max-h-28 overflow-y-auto pr-1"></div>
+                            </div>
+                            <div class="bg-white p-3 rounded-xl border border-[#F2DCE8]">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block font-medium text-[#6B5470]">Packaging & Shipping</label>
+                                    <button type="button" onclick="addDynamicItem('packaging')" class="text-[9px] text-[#C81E5C] font-bold hover:underline">+ Add Item</button>
+                                </div>
+                                <div id="packagingList" class="space-y-1.5 max-h-28 overflow-y-auto pr-1"></div>
+                            </div>
+                            <div class="bg-white p-3 rounded-xl border border-[#F2DCE8]">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block font-medium text-[#6B5470]">Marketing & Advertising</label>
+                                    <button type="button" onclick="addDynamicItem('marketing')" class="text-[9px] text-[#C81E5C] font-bold hover:underline">+ Add Item</button>
+                                </div>
+                                <div id="marketingList" class="space-y-1.5 max-h-28 overflow-y-auto pr-1"></div>
+                            </div>
+                            <div class="bg-white p-3 rounded-xl border border-[#F2DCE8]">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block font-medium text-[#6B5470]">Permits, FDA/LTO & Misc Supplies</label>
+                                    <button type="button" onclick="addDynamicItem('permitsMisc')" class="text-[9px] text-[#C81E5C] font-bold hover:underline">+ Add Item</button>
+                                </div>
+                                <div id="permitsMiscList" class="space-y-1.5 max-h-28 overflow-y-auto pr-1"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION C: TARGET PROFIT MARKUP -->
+                    <div class="p-4 bg-[#FFF9F2] rounded-2xl border border-[#F2DCE8] flex items-center justify-between">
+                        <div>
+                            <h3 class="font-bold text-[#2B1B33] text-xs">📈 Target Profit Markup (%)</h3>
+                            <p class="text-[10px] text-[#8A7690]">Percentage added on top of total unit cost + apportioned overhead.</p>
+                        </div>
+                        <div class="w-48">
+                            <input type="number" step="0.1" id="setupTargetProfitPercent" oninput="calculateTotalExpenses()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg bg-white outline-none text-right font-bold text-sm">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="shrink-0 flex gap-2 mt-4 pt-3 border-t border-[#F2DCE8] items-center justify-between">
+                    <div class="text-xs font-semibold text-[#6B5470]">
+                        Total Monthly Overhead: <span class="text-sm font-bold text-[#C81E5C]" id="grandTotalOverheadDisplay">₱0.00</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="clearSetup()" class="bg-[#FBF1F7] text-[#6B5470] px-4 py-2.5 rounded-xl font-medium hover:bg-[#F6D9EA]">Reset</button>
+                        <button onclick="saveSetupConfig()" class="bg-[#C81E5C] text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-[#A61650] transition shadow-sm">Save Configuration</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- CATEGORY MODAL -->
+    <div id="categoryModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-5 rounded-2xl shadow-xl w-[300px] border border-[#F2DCE8]">
+            <h3 class="font-semibold text-[#2B1B33] text-xs mb-3">Manage Categories</h3>
+            <div class="flex gap-2 mb-3">
+                <input type="text" id="newCategoryInput" placeholder="New Category" class="flex-grow px-3 py-1.5 border border-[#F2DCE8] rounded-lg text-xs outline-none">
+                <button onclick="addCategory()" class="bg-[#C81E5C] text-white px-3 rounded-lg text-xs">Add</button>
+            </div>
+            <ul id="categoryListUi" class="max-h-40 overflow-y-auto space-y-1 text-xs mb-4"></ul>
+            <button onclick="closeCategoryModal()" class="w-full bg-[#FBF1F7] text-[#2B1B33] py-2 rounded-lg font-medium text-xs">Done</button>
+        </div>
+    </div>
+
+    <!-- EMPLOYEE MODAL -->
+    <div id="employeeModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-5 rounded-2xl shadow-xl w-[90%] max-w-md border border-[#F2DCE8] text-xs">
+            <h3 id="empModalTitle" class="font-bold text-[#2B1B33] text-sm mb-3">Add Employee</h3>
+            <input type="hidden" id="editEmpId">
+            <div class="space-y-2.5">
+                <div>
+                    <label class="block font-medium text-[#6B5470] mb-1">Employee Name</label>
+                    <input type="text" id="empName" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">Basic Salary (₱)</label>
+                        <input type="number" id="empSalary" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">SSS Contribution (₱)</label>
+                        <input type="number" id="empSSS" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none" value="0">
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">PhilHealth (₱)</label>
+                        <input type="number" id="empPhilhealth" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none" value="0">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">Pag-IBIG (₱)</label>
+                        <input type="number" id="empPagibig" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none" value="0">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">Withholding Tax (₱)</label>
+                        <input type="number" id="empTax" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none" value="0">
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="closeEmployeeModal()" class="w-1/2 bg-[#FBF1F7] text-[#6B5470] py-2 rounded-lg font-medium">Cancel</button>
+                <button onclick="saveEmployee()" class="w-1/2 bg-[#C81E5C] text-white py-2 rounded-lg font-semibold">Save Employee</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAYSLIP MODAL -->
+    <div id="payslipModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl w-[90%] max-w-lg border border-[#F2DCE8] text-xs">
+            <div id="payslipPrintArea" class="bg-white p-4 rounded-xl border border-dashed border-[#E6C9DC] mb-4">
+                <div class="text-center mb-4">
+                    <h2 class="logo-font text-xl font-extrabold text-[#2B1B33]">Biz<span class="text-[#C81E5C]">Store</span> PH</h2>
+                    <p class="text-[10px] text-[#8A7690]">Official Monthly Payslip</p>
+                    <p class="text-[10px] font-medium text-[#6B5470]" id="payslipDateIssued"></p>
+                </div>
+                <div class="mb-3 pb-2 border-b border-[#F2DCE8]">
+                    <p><strong>Employee Name:</strong> <span id="psName">-</span></p>
+                    <p><strong>Basic Salary:</strong> ₱<span id="psBasic">0.00</span></p>
+                </div>
+                <div class="mb-3 pb-2 border-b border-[#F2DCE8]">
+                    <p class="font-bold text-[#6B5470] mb-1">Deductions:</p>
+                    <div class="flex justify-between pl-2"><span>SSS Contribution:</span> ₱<span id="psSSS">0.00</span></div>
+                    <div class="flex justify-between pl-2"><span>PhilHealth:</span> ₱<span id="psPhilhealth">0.00</span></div>
+                    <div class="flex justify-between pl-2"><span>Pag-IBIG:</span> ₱<span id="psPagibig">0.00</span></div>
+                    <div class="flex justify-between pl-2"><span>Withholding Tax:</span> ₱<span id="psTax">0.00</span></div>
+                    <div class="flex justify-between font-semibold mt-1 pt-1 border-t border-dashed border-[#F2DCE8]"><span>Total Deductions:</span> ₱<span id="psTotalDeductions">0.00</span></div>
+                </div>
+                <div class="flex justify-between items-center bg-[#FFF9F2] p-3 rounded-lg border border-[#F2DCE8]">
+                    <span class="font-bold text-sm text-[#2B1B33]">NET PAY:</span>
+                    <span class="font-extrabold text-base text-[#C81E5C]">₱<span id="psNetPay">0.00</span></span>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="closePayslipModal()" class="w-1/2 bg-[#FBF1F7] text-[#6B5470] py-2.5 rounded-xl font-medium">Close</button>
+                <button onclick="window.print()" class="w-1/2 bg-[#C81E5C] text-white py-2.5 rounded-xl font-semibold">Print Payslip</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- POS SCANNER MODAL -->
+    <div id="posScannerModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-4 rounded-2xl shadow-xl w-[90%] max-w-sm border border-[#F2DCE8] flex flex-col items-center">
+            <div class="w-full flex justify-between items-center mb-2">
+                <h3 class="font-semibold text-[#2B1B33] text-sm">Scan Product Barcode</h3>
+                <button onclick="closePosScannerModal()" class="text-[#DC2626] font-bold">✕</button>
+            </div>
+            <p id="posScannerStatus" class="text-[10px] text-[#C81E5C] mb-2 font-medium"></p>
+            <div id="posReader" class="w-full h-48 bg-black rounded-xl overflow-hidden mb-3"></div>
+            <button onclick="closePosScannerModal()" class="w-full bg-[#FBF1F7] text-[#2B1B33] py-2 rounded-lg font-medium text-xs">Cancel</button>
+        </div>
+    </div>
+
+    <!-- LOGS MODAL -->
+    <div id="logsModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-5 rounded-2xl shadow-xl w-[90%] max-w-lg border border-[#F2DCE8] flex flex-col max-h-[80vh]">
+            <div class="flex justify-between items-center mb-3 shrink-0">
+                <h3 class="font-semibold text-[#2B1B33] text-sm">Stock History: <span id="logProductName" class="text-[#C81E5C]"></span></h3>
+                <button onclick="closeLogsModal()" class="text-[#8A7690] hover:text-[#2B1B33] text-lg leading-none">✕</button>
+            </div>
+            <div class="overflow-y-auto flex-grow">
+                <table class="w-full text-left text-xs whitespace-nowrap">
+                    <thead class="sticky top-0 bg-white shadow-sm">
+                        <tr class="border-b border-[#F2DCE8] text-[#8A7690] font-medium">
+                            <th class="py-2 px-2">Date & Time</th>
+                            <th class="py-2 px-2">Action</th>
+                            <th class="py-2 px-2">Qty</th>
+                            <th class="py-2 px-2">Note</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody" class="divide-y divide-[#FBF1F7]"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="stickerCanvas" class="hidden"></canvas>
+
+    <script>
+        const db = {
+            getInventory: () => JSON.parse(localStorage.getItem('bizstore_inventory')) || [],
+            saveInventory: (data) => localStorage.setItem('bizstore_inventory', JSON.stringify(data)),
+            getLogs: () => JSON.parse(localStorage.getItem('bizstore_logs')) || [],
+            saveLog: (logData) => {
+                let logs = JSON.parse(localStorage.getItem('bizstore_logs')) || [];
+                logs.push({ ...logData, timestamp: Date.now() });
+                localStorage.setItem('bizstore_logs', JSON.stringify(logs));
+            },
+            generateId: () => 'id_' + Math.random().toString(36).substr(2, 9)
+        };
+
+        let categories = JSON.parse(localStorage.getItem('bizCategories')) || ["Skincare", "Cosmetics", "Apparel", "General"];
+        let html5QrCode = null; let snapshotStream = null; let capturedImageData = "";
+        let cart = []; let currentPosCategory = "All"; let currentInventoryCategory = "All"; let allProductsCache = [];
+        let financialChartInstance = null;
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toastNotif');
+            const icon = document.getElementById('toastIcon');
+            document.getElementById('toastMessage').innerText = message;
+            if (isError) {
+                toast.classList.add('toast-error');
+                icon.innerText = "!";
+            } else {
+                toast.classList.remove('toast-error');
+                icon.innerText = "✓";
+            }
+            toast.classList.remove('translate-x-full', 'opacity-0');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => { toast.classList.add('translate-x-full', 'opacity-0'); }, 3000);
+        }
+
+        function switchTab(tabId) {
+            ['pos', 'input', 'inventory', 'setup'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                document.getElementById(`nav-${t}`).className = "px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition";
+            });
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            document.getElementById(`nav-${tabId}`).className = "px-4 py-1.5 rounded-full text-xs font-medium bg-[#C81E5C] text-white shadow-sm transition";
+            
+            if(tabId !== 'input') { stopScanner(); stopSnapshotCamera(); }
+            if(tabId === 'pos') { loadPosCatalog(); }
+            if(tabId === 'inventory') { loadInventory(); }
+            if(tabId === 'setup') { loadSetupConfigToUi(); }
+        }
+
+        function loadCategoryDropdowns() {
+            const select = document.getElementById('prodCategory'); select.innerHTML = "";
+            categories.forEach(cat => select.innerHTML += `<option value="${cat}">${cat}</option>`);
+            
+            const renderFilters = (containerId, currentCat, onClickFunc) => {
+                let html = `<button onclick="${onClickFunc}('All')" class="px-3 py-1 rounded-full ${currentCat === 'All' ? 'bg-[#C81E5C] text-white' : 'bg-white border border-[#F2DCE8] text-[#6B5470]'} font-medium shrink-0 text-[10px]">All</button>`;
+                categories.forEach(cat => {
+                    html += `<button onclick="${onClickFunc}('${cat}')" class="px-3 py-1 rounded-full ${currentCat === cat ? 'bg-[#C81E5C] text-white' : 'bg-white border border-[#F2DCE8] text-[#6B5470]'} font-medium shrink-0 text-[10px]">${cat}</button>`;
+                });
+                document.getElementById(containerId).innerHTML = html;
+            };
+            renderFilters('posCategoryFilters', currentPosCategory, 'filterPosByCategory');
+            renderFilters('inventoryCategoryFilters', currentInventoryCategory, 'filterInventoryByCategory');
+        }
+
+        function openCategoryModal() {
+            const list = document.getElementById('categoryListUi'); list.innerHTML = "";
+            categories.forEach((cat, i) => {
+                list.innerHTML += `<li class="flex justify-between bg-[#FFF9F2] p-2 rounded border border-[#F2DCE8]"><span>${cat}</span><button onclick="removeCategory(${i})" class="text-[#DC2626]">✕</button></li>`;
+            });
+            document.getElementById('categoryModal').classList.remove('hidden');
+        }
+        function closeCategoryModal() { document.getElementById('categoryModal').classList.add('hidden'); loadCategoryDropdowns(); }
+        function addCategory() {
+            let val = document.getElementById('newCategoryInput').value.trim();
+            if(val && !categories.includes(val)) { categories.push(val); localStorage.setItem('bizCategories', JSON.stringify(categories)); document.getElementById('newCategoryInput').value = ""; openCategoryModal(); }
+        }
+        function removeCategory(i) {
+            if(categories.length > 1) { categories.splice(i, 1); localStorage.setItem('bizCategories', JSON.stringify(categories)); openCategoryModal(); } else { showToast("Keep at least one category.", true); }
+        }
+
+        // --- SETUP & FINANCIAL MONITOR LOGIC ---
+        let setupData = {
+            rent: 0,
+            targetProfitPercent: 30,
+            employees: [],
+            subscriptions: [],
+            utilities: [],
+            packaging: [],
+            marketing: [],
+            permitsMisc: []
+        };
+
+        function getMonthlyKey(monthStr) {
+            return 'bizConfig_v6_' + (monthStr || new Date().toISOString().slice(0, 7));
+        }
+
+        function toggleFinancialViewMode() {
+            let modeEl = document.getElementById('financialViewMode');
+            if (!modeEl) return;
+            let mode = modeEl.value;
+            let container = document.getElementById('financialTimePickerContainer');
+            if (!container) return;
+
+            let today = new Date().toISOString().slice(0, 10);
+            let thisMonth = new Date().toISOString().slice(0, 7);
+            let thisYear = new Date().getFullYear();
+
+            if (mode === 'daily') {
+                container.innerHTML = `<input type="date" id="financialDateSelect" value="${today}" onchange="loadFinancials()" class="px-2.5 py-1 border border-[#F2DCE8] rounded-lg bg-white font-medium text-xs outline-none">`;
+            } else if (mode === 'monthly') {
+                container.innerHTML = `<input type="month" id="financialMonthSelect" value="${thisMonth}" onchange="loadFinancials()" class="px-2.5 py-1 border border-[#F2DCE8] rounded-lg bg-white font-medium text-xs outline-none">`;
+            } else {
+                let yearsHtml = `<select id="financialYearSelect" onchange="loadFinancials()" class="px-2.5 py-1 border border-[#F2DCE8] rounded-lg bg-white font-medium text-xs outline-none">`;
+                for (let y = thisYear; y >= thisYear - 3; y--) {
+                    yearsHtml += `<option value="${y}" ${y === thisYear ? 'selected' : ''}>${y}</option>`;
+                }
+                yearsHtml += `</select>`;
+                container.innerHTML = yearsHtml;
+            }
+            loadFinancials();
+        }
+
+        function loadSetupConfigToUi() {
+            let modeEl = document.getElementById('financialViewMode');
+            if(!modeEl || !modeEl.innerHTML) {
+                toggleFinancialViewMode();
+            } else {
+                loadFinancials();
+            }
+
+            let thisMonth = new Date().toISOString().slice(0, 7);
+            let saved = JSON.parse(localStorage.getItem(getMonthlyKey(thisMonth))) || JSON.parse(localStorage.getItem('bizConfig_v5')) || setupData;
+            setupData = saved;
+
+            document.getElementById('setupRent').value = setupData.rent || 0;
+            document.getElementById('setupTargetProfitPercent').value = setupData.targetProfitPercent || 30;
+            renderEmployeesTable();
+            renderDynamicList('subscriptions', setupData.subscriptions);
+            renderDynamicList('utilities', setupData.utilities);
+            renderDynamicList('packaging', setupData.packaging);
+            renderDynamicList('marketing', setupData.marketing);
+            renderDynamicList('permitsMisc', setupData.permitsMisc);
+            calculateTotalExpenses();
+        }
+
+        function loadFinancials() {
+            calculateTotalExpenses();
+            let modeEl = document.getElementById('financialViewMode');
+            if (!modeEl) return;
+            let mode = modeEl.value;
+            let logs = db.getLogs();
+            
+            let totalRevenue = 0;
+            let targetKey = "";
+
+            if (mode === 'daily') {
+                let el = document.getElementById('financialDateSelect');
+                targetKey = el ? el.value : new Date().toISOString().slice(0, 10);
+            } else if (mode === 'monthly') {
+                let el = document.getElementById('financialMonthSelect');
+                targetKey = el ? el.value : new Date().toISOString().slice(0, 7);
+            } else {
+                let el = document.getElementById('financialYearSelect');
+                targetKey = el ? el.value : new Date().getFullYear().toString();
+            }
+
+            // Chart data preparation
+            let chartLabels = [];
+            let chartRevenues = [];
+            let chartExpenses = [];
+
+            let monthlyFixed = (setupData.rent || 0) + (setupData.employees || []).reduce((s, e) => s + e.salary, 0) + (setupData.subscriptions || []).reduce((s, i) => s + i.cost, 0);
+            let monthlyVariable = (setupData.utilities || []).reduce((s, i) => s + i.cost, 0) + (setupData.packaging || []).reduce((s, i) => s + i.cost, 0) + (setupData.marketing || []).reduce((s, i) => s + i.cost, 0) + (setupData.permitsMisc || []).reduce((s, i) => s + i.cost, 0);
+            let totalMonthlyExpense = monthlyFixed + monthlyVariable;
+
+            if (mode === 'daily') {
+                // targetKey is YYYY-MM-DD. Let's show hourly or past hours / or just this day's summary vs past 7 days
+                // Let's show past 7 days ending on targetKey
+                let baseDate = new Date(targetKey);
+                for (let i = 6; i >= 0; i--) {
+                    let d = new Date(baseDate);
+                    d.setDate(baseDate.getDate() - i);
+                    let dStr = d.toISOString().slice(0, 10);
+                    chartLabels.push(dStr);
+
+                    let dayRev = 0;
+                    logs.forEach(log => {
+                        let lDate = new Date(log.timestamp).toISOString().slice(0, 10);
+                        if (lDate === dStr && log.action === 'Sold (Checkout)') {
+                            let m = log.note.match(/₱([\d,]+\.?\d*)/);
+                            if (m && m[1]) dayRev += parseFloat(m[1].replace(/,/g, '')) || 0;
+                        }
+                    });
+                    chartRevenues.push(dayRev);
+                    chartExpenses.push(totalMonthlyExpense / 30);
+                }
+
+                // Calculate target day total revenue
+                logs.forEach(log => {
+                    let logDate = new Date(log.timestamp);
+                    let logDateStr = logDate.toISOString().slice(0, 10);
+                    if (logDateStr === targetKey && log.action === 'Sold (Checkout)') {
+                        let m = log.note.match(/₱([\d,]+\.?\d*)/);
+                        if (m && m[1]) totalRevenue += parseFloat(m[1].replace(/,/g, '')) || 0;
+                    }
+                });
+            } else if (mode === 'monthly') {
+                // targetKey is YYYY-MM. Show days of that month or weeks
+                let [year, month] = targetKey.split('-').map(Number);
+                let daysInMonth = new Date(year, month, 0).getDate();
+                
+                for (let day = 1; day <= daysInMonth; day++) {
+                    let dayStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    chartLabels.push(dayStr);
+
+                    let dayRev = 0;
+                    logs.forEach(log => {
+                        let lDate = new Date(log.timestamp).toISOString().slice(0, 10);
+                        if (lDate === dayStr && log.action === 'Sold (Checkout)') {
+                            let m = log.note.match(/₱([\d,]+\.?\d*)/);
+                            if (m && m[1]) dayRev += parseFloat(m[1].replace(/,/g, '')) || 0;
+                        }
+                    });
+                    chartRevenues.push(dayRev);
+                    chartExpenses.push(totalMonthlyExpense / daysInMonth);
+                }
+
+                logs.forEach(log => {
+                    let logDate = new Date(log.timestamp);
+                    let logMonthStr = logDate.toISOString().slice(0, 7);
+                    if (logMonthStr === targetKey && log.action === 'Sold (Checkout)') {
+                        let m = log.note.match(/₱([\d,]+\.?\d*)/);
+                        if (m && m[1]) totalRevenue += parseFloat(m[1].replace(/,/g, '')) || 0;
+                    }
+                });
+            } else {
+                // annual: targetKey is YYYY. Show months Jan to Dec
+                let year = parseInt(targetKey);
+                let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                chartLabels = monthNames;
+
+                for (let m = 1; m <= 12; m++) {
+                    let mStr = `${year}-${String(m).padStart(2, '0')}`;
+                    let mRev = 0;
+                    logs.forEach(log => {
+                        let lMonth = new Date(log.timestamp).toISOString().slice(0, 7);
+                        if (lMonth === mStr && log.action === 'Sold (Checkout)') {
+                            let match = log.note.match(/₱([\d,]+\.?\d*)/);
+                            if (match && match[1]) mRev += parseFloat(match[1].replace(/,/g, '')) || 0;
+                        }
+                    });
+                    chartRevenues.push(mRev);
+                    chartExpenses.push(totalMonthlyExpense);
+                }
+
+                logs.forEach(log => {
+                    let logDate = new Date(log.timestamp);
+                    let logYearStr = logDate.getFullYear().toString();
+                    if (logYearStr === targetKey && log.action === 'Sold (Checkout)') {
+                        let m = log.note.match(/₱([\d,]+\.?\d*)/);
+                        if (m && m[1]) totalRevenue += parseFloat(m[1].replace(/,/g, '')) || 0;
+                    }
+                });
+            }
+
+            let totalExpenses = 0;
+            if (mode === 'daily') {
+                totalExpenses = totalMonthlyExpense / 30;
+            } else if (mode === 'monthly') {
+                totalExpenses = totalMonthlyExpense;
+            } else {
+                totalExpenses = totalMonthlyExpense * 12;
+            }
+
+            let netProfit = totalRevenue - totalExpenses;
+            let margin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+            document.getElementById('metricRevenue').innerText = `₱${totalRevenue.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            document.getElementById('metricExpenses').innerText = `₱${totalExpenses.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            
+            let profitEl = document.getElementById('metricNetProfit');
+            profitEl.innerText = `₱${netProfit.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            profitEl.className = `text-base font-bold ${netProfit >= 0 ? 'text-[#1F9D55]' : 'text-[#DC2626]'}`;
+
+            document.getElementById('metricMargin').innerText = `${margin.toFixed(1)}%`;
+
+            let advice = document.getElementById('financialAdvice');
+            if (netProfit < 0) {
+                advice.innerText = "⚠️ Lugi sa napiling panahon! Subukang taasan ang Target Markup Profit % o bawasan ang overhead.";
+                advice.className = "text-[10px] text-[#DC2626] font-semibold italic";
+            } else {
+                advice.innerText = "✨ Maganda ang performance! Kumikita ka sa panahong ito. Ipagpatuloy ang pagsubaybay.";
+                advice.className = "text-[10px] text-[#1F9D55] font-semibold italic";
+            }
+
+            // Render Chart.js
+            renderFinancialChart(chartLabels, chartRevenues, chartExpenses);
+        }
+
+        function renderFinancialChart(labels, revenues, expenses) {
+            const ctx = document.getElementById('financialChart').getContext('2d');
+            if (financialChartInstance) {
+                financialChartInstance.destroy();
+            }
+            financialChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Revenue (₱)',
+                            data: revenues,
+                            borderColor: '#1F9D55',
+                            backgroundColor: 'rgba(31, 157, 85, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Expenses (₱)',
+                            data: expenses,
+                            borderColor: '#DC2626',
+                            backgroundColor: 'rgba(220, 38, 38, 0.05)',
+                            fill: true,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { font: { size: 9 } } },
+                        x: { ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        function renderDynamicList(key, items) {
+            const container = document.getElementById(`${key}List`);
+            container.innerHTML = "";
+            if(!items || items.length === 0) {
+                container.innerHTML = `<p class="text-[10px] text-[#B7A7BE]">No items.</p>`;
+                return;
+            }
+            items.forEach((item, index) => {
+                container.innerHTML += `
+                    <div class="flex gap-1.5 items-center bg-white p-1.5 rounded-lg border border-[#F2DCE8]">
+                        <input type="text" value="${item.name}" oninput="updateDynamicItem('${key}', ${index}, 'name', this.value)" placeholder="Name" class="flex-grow px-2 py-1 text-[11px] outline-none">
+                        <input type="number" value="${item.cost}" oninput="updateDynamicItem('${key}', ${index}, 'cost', this.value)" placeholder="Cost" class="w-20 px-2 py-1 text-[11px] outline-none text-right font-medium text-[#C81E5C]">
+                        <button type="button" onclick="removeDynamicItem('${key}', ${index})" class="text-[#DC2626] px-1 font-bold">×</button>
+                    </div>
+                `;
+            });
+        }
+
+        function addDynamicItem(key) {
+            if(!setupData[key]) setupData[key] = [];
+            setupData[key].push({ id: db.generateId(), name: '', cost: 0 });
+            renderDynamicList(key, setupData[key]);
+            calculateTotalExpenses();
+        }
+
+        function updateDynamicItem(key, index, field, value) {
+            setupData[key][index][field] = field === 'cost' ? parseFloat(value) || 0 : value;
+            calculateTotalExpenses();
+        }
+
+        function removeDynamicItem(key, index) {
+            setupData[key].splice(index, 1);
+            renderDynamicList(key, setupData[key]);
+            calculateTotalExpenses();
+        }
+
+        function openEmployeeModal(empId = null) {
+            document.getElementById('editEmpId').value = empId || '';
+            if(empId) {
+                let emp = setupData.employees.find(e => e.id === empId);
+                if(emp) {
+                    document.getElementById('empModalTitle').innerText = "Edit Employee";
+                    document.getElementById('empName').value = emp.name;
+                    document.getElementById('empSalary').value = emp.salary;
+                    document.getElementById('empSSS').value = emp.sss;
+                    document.getElementById('empPhilhealth').value = emp.philhealth;
+                    document.getElementById('empPagibig').value = emp.pagibig;
+                    document.getElementById('empTax').value = emp.tax;
+                }
+            } else {
+                document.getElementById('empModalTitle').innerText = "Add Employee";
+                document.getElementById('empName').value = '';
+                document.getElementById('empSalary').value = '';
+                document.getElementById('empSSS').value = 0;
+                document.getElementById('empPhilhealth').value = 0;
+                document.getElementById('empPagibig').value = 0;
+                document.getElementById('empTax').value = 0;
+            }
+            document.getElementById('employeeModal').classList.remove('hidden');
+        }
+
+        function closeEmployeeModal() { document.getElementById('employeeModal').classList.add('hidden'); }
+
+        function saveEmployee() {
+            let id = document.getElementById('editEmpId').value;
+            let name = document.getElementById('empName').value.trim();
+            let salary = parseFloat(document.getElementById('empSalary').value) || 0;
+            let sss = parseFloat(document.getElementById('empSSS').value) || 0;
+            let philhealth = parseFloat(document.getElementById('empPhilhealth').value) || 0;
+            let pagibig = parseFloat(document.getElementById('empPagibig').value) || 0;
+            let tax = parseFloat(document.getElementById('empTax').value) || 0;
+
+            if(!name) { showToast("Please enter employee name.", true); return; }
+
+            if(id) {
+                let idx = setupData.employees.findIndex(e => e.id === id);
+                if(idx > -1) setupData.employees[idx] = { id, name, salary, sss, philhealth, pagibig, tax };
+            } else {
+                setupData.employees.push({ id: db.generateId(), name, salary, sss, philhealth, pagibig, tax });
+            }
+            closeEmployeeModal();
+            renderEmployeesTable();
+            calculateTotalExpenses();
+        }
+
+        function deleteEmployee(id) {
+            setupData.employees = setupData.employees.filter(e => e.id !== id);
+            renderEmployeesTable();
+            calculateTotalExpenses();
+        }
+
+        function renderEmployeesTable() {
+            const tbody = document.getElementById('employeeTableBody');
+            tbody.innerHTML = "";
+            if(!setupData.employees || setupData.employees.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-3 text-center text-[#B7A7BE]">No employees added yet.</td></tr>`;
+                return;
+            }
+            setupData.employees.forEach(emp => {
+                let totalDeductions = emp.sss + emp.philhealth + emp.pagibig + emp.tax;
+                let netPay = emp.salary - totalDeductions;
+                tbody.innerHTML += `
+                    <tr class="border-b border-[#FBF1F7] hover:bg-white">
+                        <td class="py-2 px-2 font-medium text-[#2B1B33]">${emp.name}</td>
+                        <td class="py-2 px-2">₱${emp.salary.toFixed(2)}</td>
+                        <td class="py-2 px-2 text-[#8A7690]">₱${(emp.sss + emp.philhealth + emp.pagibig).toFixed(2)}</td>
+                        <td class="py-2 px-2 text-[#8A7690]">₱${emp.tax.toFixed(2)}</td>
+                        <td class="py-2 px-2 font-bold text-[#C81E5C]">₱${netPay.toFixed(2)}</td>
+                        <td class="py-2 px-2 text-right space-x-1">
+                            <button onclick="generatePayslip('${emp.id}')" class="text-[#1F9D55] font-medium hover:underline text-[10px]">Payslip</button>
+                            <button onclick="openEmployeeModal('${emp.id}')" class="text-[#C81E5C] font-medium hover:underline text-[10px]">Edit</button>
+                            <button onclick="deleteEmployee('${emp.id}')" class="text-[#DC2626] font-medium hover:underline text-[10px]">Del</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function generatePayslip(empId) {
+            let emp = setupData.employees.find(e => e.id === empId);
+            if(!emp) return;
+            document.getElementById('payslipDateIssued').innerText = "Issued: " + new Date().toLocaleDateString();
+            document.getElementById('psName').innerText = emp.name;
+            document.getElementById('psBasic').innerText = emp.salary.toFixed(2);
+            document.getElementById('psSSS').innerText = emp.sss.toFixed(2);
+            document.getElementById('psPhilhealth').innerText = emp.philhealth.toFixed(2);
+            document.getElementById('psPagibig').innerText = emp.pagibig.toFixed(2);
+            document.getElementById('psTax').innerText = emp.tax.toFixed(2);
+            let totalDed = emp.sss + emp.philhealth + emp.pagibig + emp.tax;
+            document.getElementById('psTotalDeductions').innerText = totalDed.toFixed(2);
+            document.getElementById('psNetPay').innerText = (emp.salary - totalDed).toFixed(2);
+            document.getElementById('payslipModal').classList.remove('hidden');
+        }
+
+        function closePayslipModal() { document.getElementById('payslipModal').classList.add('hidden'); }
+
+        function calculateTotalExpenses() {
+            let rent = parseFloat(document.getElementById('setupRent').value) || 0;
+            setupData.rent = rent;
+            setupData.targetProfitPercent = parseFloat(document.getElementById('setupTargetProfitPercent').value) || 30;
+
+            let totalPayroll = setupData.employees.reduce((sum, e) => sum + e.salary, 0);
+            let totalSubscriptions = (setupData.subscriptions || []).reduce((sum, item) => sum + item.cost, 0);
+            let totalFixed = rent + totalPayroll + totalSubscriptions;
+
+            let totalUtilities = (setupData.utilities || []).reduce((sum, item) => sum + item.cost, 0);
+            let totalPackaging = (setupData.packaging || []).reduce((sum, item) => sum + item.cost, 0);
+            let totalMarketing = (setupData.marketing || []).reduce((sum, item) => sum + item.cost, 0);
+            let totalPermitsMisc = (setupData.permitsMisc || []).reduce((sum, item) => sum + item.cost, 0);
+            let totalVariable = totalUtilities + totalPackaging + totalMarketing + totalPermitsMisc;
+
+            let grandTotal = totalFixed + totalVariable;
+
+            document.getElementById('totalFixedHeaderDisplay').innerText = `Total: ₱${totalFixed.toFixed(2)}`;
+            document.getElementById('totalVariableHeaderDisplay').innerText = `Total: ₱${totalVariable.toFixed(2)}`;
+            document.getElementById('grandTotalOverheadDisplay').innerText = `₱${grandTotal.toFixed(2)}`;
+        }
+
+        function clearSetup() {
+            let thisMonth = new Date().toISOString().slice(0, 7);
+            localStorage.removeItem(getMonthlyKey(thisMonth));
+            setupData = { rent: 0, targetProfitPercent: 30, employees: [], subscriptions: [], utilities: [], packaging: [], marketing: [], permitsMisc: [] };
+            loadSetupConfigToUi();
+            showToast("Setup cleared.");
+        }
+
+        function saveSetupConfig() {
+            calculateTotalExpenses();
+            let thisMonth = new Date().toISOString().slice(0, 7);
+            localStorage.setItem(getMonthlyKey(thisMonth), JSON.stringify(setupData));
+            showToast("Setup & Monthly Expenses saved!");
+            loadFinancials();
+        }
+
+        function getPrice(cost, totalStock) {
+            let thisMonth = new Date().toISOString().slice(0, 7);
+            let cfg = JSON.parse(localStorage.getItem(getMonthlyKey(thisMonth))) || setupData;
+            let totalFixed = (cfg.rent || 0) + (cfg.employees || []).reduce((s, e) => s + e.salary, 0) + (cfg.subscriptions || []).reduce((s, i) => s + i.cost, 0);
+            let totalVariable = (cfg.utilities || []).reduce((s, i) => s + i.cost, 0) + (cfg.packaging || []).reduce((s, i) => s + i.cost, 0) + (cfg.marketing || []).reduce((s, i) => s + i.cost, 0) + (cfg.permitsMisc || []).reduce((s, i) => s + i.cost, 0);
+            let totalOverhead = totalFixed + totalVariable;
+
+            let overheadPerUnit = totalOverhead / (totalStock > 0 ? totalStock : 1);
+            let markup = (cfg.targetProfitPercent !== undefined ? cfg.targetProfitPercent : 30) / 100;
+            return (cost + overheadPerUnit) * (1 + markup);
+        }
+
+        // --- BARCODE SCANNER ---
+        function startScanner(elementId, statusElId, onSuccess) {
+            const statusEl = statusElId ? document.getElementById(statusElId) : null;
+            if (!window.isSecureContext && location.hostname !== "localhost") {
+                if(statusEl) statusEl.innerText = "HTTPS required";
+                showToast("Camera requires HTTPS or localhost.", true);
+                return;
+            }
+
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => initCam()).catch(() => initCam());
+            } else {
+                html5QrCode = new Html5Qrcode(elementId);
+                initCam();
+            }
+
+            function initCam() {
+                Html5Qrcode.getCameras().then(cameras => {
+                    if (!cameras || cameras.length === 0) {
+                        if(statusEl) statusEl.innerText = "No camera";
+                        showToast("Walang nahanap na camera.", true);
+                        return;
+                    }
+                    let camId = cameras[0].id; 
+                    let backCam = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('environment'));
+                    if(backCam) camId = backCam.id;
+
+                    html5QrCode.start(
+                        camId, 
+                        { fps: 10, qrbox: { width: 220, height: 120 } },
+                        (decodedText) => { onSuccess(decodedText); },
+                        (scanErr) => {}
+                    ).then(() => {
+                        if(statusEl) statusEl.innerText = "Active";
+                    }).catch(err => {
+                        if(statusEl) statusEl.innerText = "Error";
+                        showToast("Hindi ma-start ang scanner: " + err, true);
+                    });
+                }).catch(err => {
+                    if(statusEl) statusEl.innerText = "Denied";
+                    showToast("Camera access denied: " + err, true);
+                });
+            }
+        }
+
+        function stopScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => { 
+                    const stat = document.getElementById('scannerStatus');
+                    if(stat) stat.innerText = ""; 
+                }).catch(() => {});
+            }
+        }
+
+        function startAddScanner() {
+            startScanner("reader", "scannerStatus", (decodedText) => {
+                document.getElementById('prodBarcode').value = decodedText;
+                stopScanner();
+                showToast("Barcode Scanned: " + decodedText);
+            });
+        }
+
+        function openPosScannerModal() {
+            document.getElementById('posScannerModal').classList.remove('hidden');
+            startScanner("posReader", "posScannerStatus", (decodedText) => {
+                stopScanner();
+                document.getElementById('posScannerModal').classList.add('hidden');
+                let inv = db.getInventory();
+                let item = inv.find(x => x.barcode === decodedText);
+                if(item) {
+                    let totalStock = inv.reduce((s, p) => s + (p.qty||0), 0);
+                    let price = getPrice(item.cost, totalStock);
+                    addToCart(item.id, item.name, price, item.qty);
+                    showToast("Added via Scan: " + item.name);
+                } else {
+                    showToast("Item not found for barcode!", true);
+                }
+            });
+        }
+
+        function closePosScannerModal() {
+            stopScanner();
+            document.getElementById('posScannerModal').classList.add('hidden');
+        }
+
+        function generateAutoBarcode() { 
+            document.getElementById('prodBarcode').value = 'BPH-' + Math.floor(10000 + Math.random() * 90000); 
+        }
+
+        function downloadBarcodeSticker() {
+            let barcodeVal = document.getElementById('prodBarcode').value.trim();
+            if(!barcodeVal) { showToast("Please enter or generate a barcode first.", true); return; }
+            try {
+                let canvas = document.getElementById('stickerCanvas');
+                JsBarcode(canvas, barcodeVal, { format: "CODE128", displayValue: true, fontSize: 16, margin: 10, width: 2, height: 80 });
+                let link = document.createElement('a');
+                link.download = `BizStore-Barcode-${barcodeVal}.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                showToast("Barcode downloaded successfully!");
+            } catch (err) {
+                showToast("Failed to generate barcode image.", true);
+            }
+        }
+
+        function startSnapshotCamera() {
+            const video = document.getElementById('snapshotVideo');
+            navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+                snapshotStream = stream; video.srcObject = stream; video.classList.remove('hidden');
+                document.getElementById('camPlaceholder').classList.add('hidden'); document.getElementById('snapshotPreview').classList.add('hidden');
+            }).catch((err)=>{ showToast("Hindi ma-access ang camera: " + err, true); });
+        }
+        function takeSnapshot() {
+            if (!snapshotStream) return;
+            const video = document.getElementById('snapshotVideo'); const canvas = document.getElementById('snapshotCanvas'); const preview = document.getElementById('snapshotPreview');
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight; canvas.getContext('2d').drawImage(video, 0, 0);
+            capturedImageData = canvas.toDataURL('image/jpeg'); preview.src = capturedImageData;
+            preview.classList.remove('hidden'); video.classList.add('hidden'); stopSnapshotCamera();
+        }
+        function stopSnapshotCamera() { if(snapshotStream) { snapshotStream.getTracks().forEach(t => t.stop()); snapshotStream = null; } }
+
+        function toggleExpiryMode() {
+            let mode = document.querySelector('input[name="expiryMode"]:checked').value;
+            if (mode === 'date') {
+                document.getElementById('prodExpiryDate').classList.remove('hidden');
+                document.getElementById('expiryMonthsWrap').classList.add('hidden');
+            } else {
+                document.getElementById('prodExpiryDate').classList.add('hidden');
+                document.getElementById('expiryMonthsWrap').classList.remove('hidden');
+                updateComputedExpiry();
+            }
+        }
+        function updateComputedExpiry() {
+            let mode = document.querySelector('input[name="expiryMode"]:checked').value;
+            if (mode !== 'months') return;
+            let months = parseInt(document.getElementById('prodExpiryMonths').value);
+            let dateInVal = document.getElementById('prodDate').value;
+            let display = document.getElementById('computedExpiryDisplay');
+            if (!months || !dateInVal) { display.innerText = "-"; return; }
+            let d = new Date(dateInVal + "T00:00:00");
+            d.setMonth(d.getMonth() + months);
+            display.innerText = d.toISOString().split('T')[0];
+        }
+        function computeExpiryDate() {
+            let mode = document.querySelector('input[name="expiryMode"]:checked').value;
+            if (mode === 'date') return document.getElementById('prodExpiryDate').value;
+            let months = parseInt(document.getElementById('prodExpiryMonths').value);
+            let dateInVal = document.getElementById('prodDate').value;
+            if (!months || !dateInVal) return "";
+            let d = new Date(dateInVal + "T00:00:00");
+            d.setMonth(d.getMonth() + months);
+            return d.toISOString().split('T')[0];
+        }
+        function resetExpiryUi() {
+            document.querySelector('input[name="expiryMode"][value="date"]').checked = true;
+            document.getElementById('prodExpiryDate').classList.remove('hidden');
+            document.getElementById('prodExpiryDate').value = "";
+            document.getElementById('expiryMonthsWrap').classList.add('hidden');
+            document.getElementById('prodExpiryMonths').value = "";
+            document.getElementById('computedExpiryDisplay').innerText = "-";
+        }
+
+        function clearProductForm() {
+            document.getElementById('productForm').reset();
+            document.getElementById('editProductId').value = "";
+            document.getElementById('formTitle').innerText = "✨ Add New Product";
+            document.getElementById('submitBtn').innerText = "Save Product";
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('snapshotPreview').src = "";
+            document.getElementById('snapshotPreview').classList.add('hidden');
+            document.getElementById('camPlaceholder').classList.remove('hidden');
+            capturedImageData = "";
+            document.getElementById('prodDate').valueAsDate = new Date();
+            resetExpiryUi();
+        }
+
+        function resolveProductImage() {
+            return new Promise((resolve) => {
+                if (capturedImageData && capturedImageData.startsWith('data:')) {
+                    resolve(capturedImageData);
+                } else {
+                    let existingSrc = document.getElementById('snapshotPreview').src;
+                    let isRealImage = existingSrc && (existingSrc.startsWith('http') || existingSrc.startsWith('data:')) && existingSrc !== window.location.href;
+                    resolve(isRealImage ? existingSrc : "");
+                }
+            });
+        }
+
+        function saveProduct(e) {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            let barcodeInput = document.getElementById('prodBarcode').value.trim();
+            let id = document.getElementById('editProductId').value;
+            let expiryDate = computeExpiryDate();
+
+            if (document.querySelector('input[name="expiryMode"]:checked').value === 'months' && !expiryDate) {
+                showToast("Please specify months for expiry.", true);
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Saving...";
+            let inputQty = parseInt(document.getElementById('prodQty').value);
+
+            resolveProductImage().then((imageUrl) => {
+                const product = {
+                    category: document.getElementById('prodCategory').value,
+                    barcode: barcodeInput,
+                    name: document.getElementById('prodName').value,
+                    cost: parseFloat(document.getElementById('prodCost').value),
+                    qty: inputQty,
+                    dateIn: document.getElementById('prodDate').value,
+                    expiryDate: expiryDate,
+                    image: imageUrl || "",
+                    timestamp: Date.now()
+                };
+
+                let inventory = db.getInventory();
+
+                if (id) {
+                    let idx = inventory.findIndex(x => x.id === id);
+                    if(idx > -1) {
+                        let oldQty = inventory[idx].qty;
+                        let qtyDiff = inputQty - oldQty;
+                        product.id = id;
+                        product.timestamp = inventory[idx].timestamp; 
+                        inventory[idx] = product;
+                        db.saveInventory(inventory);
+
+                        if(qtyDiff !== 0) {
+                            db.saveLog({
+                                productId: id,
+                                action: qtyDiff > 0 ? 'Stock Adjustment (In)' : 'Stock Adjustment (Out)',
+                                qtyChange: qtyDiff,
+                                note: 'Manual update via Add/Edit form'
+                            });
+                        }
+                        showToast("Product updated successfully!");
+                        clearProductForm();
+                    }
+                } else {
+                    if (inventory.some(x => x.barcode === barcodeInput)) {
+                        showToast("Barcode already exists!", true);
+                    } else {
+                        product.id = db.generateId();
+                        inventory.push(product);
+                        db.saveInventory(inventory);
+                        db.saveLog({
+                            productId: product.id,
+                            action: 'Initial Stock In',
+                            qtyChange: inputQty,
+                            note: 'New product added'
+                        });
+                        showToast("Product saved successfully!");
+                        clearProductForm();
+                    }
+                }
+            }).catch(err => {
+                showToast("Error: " + err.message, true);
+            }).finally(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerText = id ? "Update Product" : "Save Product";
+            });
+        }
+
+        function triggerEdit(id) {
+            let p = allProductsCache.find(x => x.id === id);
+            if(p) {
+                switchTab('input');
+                document.getElementById('formTitle').innerText = "✏️ Edit Product";
+                document.getElementById('submitBtn').innerText = "Update Product";
+                document.getElementById('editProductId').value = p.id;
+                document.getElementById('prodCategory').value = p.category;
+                document.getElementById('prodBarcode').value = p.barcode;
+                document.getElementById('prodName').value = p.name;
+                document.getElementById('prodCost').value = p.cost;
+                document.getElementById('prodQty').value = p.qty;
+                document.getElementById('prodDate').value = p.dateIn;
+                resetExpiryUi();
+                document.getElementById('prodExpiryDate').value = p.expiryDate || "";
+                if(p.image && p.image.length > 50) {
+                    capturedImageData = "";
+                    document.getElementById('snapshotPreview').src = p.image;
+                    document.getElementById('snapshotPreview').classList.remove('hidden');
+                    document.getElementById('camPlaceholder').classList.add('hidden');
+                } else {
+                    capturedImageData = "";
+                    document.getElementById('snapshotPreview').classList.add('hidden');
+                    document.getElementById('camPlaceholder').classList.remove('hidden');
+                }
+            }
+        }
+
+        function loadPosCatalog() {
+            const grid = document.getElementById('posCatalogGrid'); grid.innerHTML = `<p class="col-span-full text-center text-[#B7A7BE] text-xs">Loading...</p>`;
+            let inventory = db.getInventory();
+            inventory.sort((a, b) => b.timestamp - a.timestamp);
+            let totalStock = 0; allProductsCache = [];
+            inventory.forEach(p => { totalStock += (p.qty || 0); allProductsCache.push(p); });
+            renderPosFilteredProducts(totalStock);
+        }
+        function filterPosByCategory(cat) { currentPosCategory = cat; loadCategoryDropdowns(); let ts = allProductsCache.reduce((s, p) => s + (p.qty||0), 0); renderPosFilteredProducts(ts); }
+        function renderPosFilteredProducts(totalStock) {
+            const grid = document.getElementById('posCatalogGrid'); grid.innerHTML = "";
+            let filtered = allProductsCache.filter(p => (currentPosCategory === 'All' || p.category === currentPosCategory));
+            if(filtered.length === 0) { grid.innerHTML = `<p class="col-span-full text-center text-[#B7A7BE] text-xs">No items.</p>`; return; }
+            filtered.forEach(p => {
+                let price = getPrice(p.cost, totalStock);
+                let photo = p.image ? `<img src="${p.image}" class="w-full aspect-square object-cover">` : `<div class="w-full aspect-square bg-[#FBF1F7] flex items-center justify-center text-[8px] text-[#B7A7BE]">No Photo</div>`;
+                grid.innerHTML += `
+                    <div onclick="addToCart('${p.id}', '${p.name.replace(/'/g, "\\'")}', ${price}, ${p.qty})" class="bg-white rounded-lg shadow-sm border border-[#F2DCE8] overflow-hidden cursor-pointer flex flex-col">
+                        ${photo}
+                        <div class="p-1.5 flex flex-col flex-grow">
+                            <h3 class="font-medium text-[#2B1B33] text-[10px] leading-tight line-clamp-2">${p.name}</h3>
+                            <div class="mt-auto flex justify-between items-end pt-1">
+                                <span class="text-[#C81E5C] font-bold text-[11px]">₱${price.toFixed(2)}</span>
+                                <span class="text-[8px] text-[#8A7690]">Qty:${p.qty}</span>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+        }
+        function filterPosCatalog() { let input = document.getElementById('posSearch').value.toLowerCase(); let cards = document.getElementById('posCatalogGrid').children; for(let c of cards) c.style.display = c.innerText.toLowerCase().includes(input) ? "flex" : "none"; }
+
+        function addToCart(id, name, price, maxQty) {
+            if(maxQty <= 0) { showToast("Out of stock!", true); return; }
+            let item = cart.find(i => i.id === id);
+            if(item) { if(item.qty < maxQty) item.qty++; else showToast("Max stock reached.", true); } else { cart.push({ id, name, price, qty: 1, maxQty }); }
+            renderCart();
+        }
+        function removeFromCart(i) { cart.splice(i, 1); renderCart(); }
+        function clearCart() { cart = []; renderCart(); }
+        function renderCart() {
+            let container = document.getElementById('cartList');
+            if(cart.length === 0) { container.innerHTML = `<p class="text-[#B7A7BE] text-center py-4">Cart empty.</p>`; document.getElementById('cartTotalPrice').innerText = "0.00"; return; }
+            container.innerHTML = ""; let total = 0;
+            cart.forEach((item, i) => {
+                let subtotal = item.price * item.qty; total += subtotal;
+                container.innerHTML += `
+                    <div class="flex justify-between items-center py-1 border-b border-[#FBF1F7] last:border-0">
+                        <div class="w-2/3">
+                            <p class="font-medium text-[#2B1B33] truncate text-[11px]">${item.name}</p>
+                            <p class="text-[9px] text-[#8A7690]">₱${item.price.toFixed(2)} x ${item.qty}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-[#2B1B33] text-[11px]">₱${subtotal.toFixed(2)}</span>
+                            <button onclick="removeFromCart(${i})" class="text-[#DC2626] hover:text-red-700 bg-[#FFF9F2] px-1.5 rounded font-bold">×</button>
+                        </div>
+                    </div>`;
+            });
+            document.getElementById('cartTotalPrice').innerText = total.toLocaleString('en-US', {minimumFractionDigits: 2});
+        }
+
+        function checkoutOrder() {
+            if(cart.length === 0) return;
+            let inventory = db.getInventory();
+            cart.forEach(item => {
+                let idx = inventory.findIndex(x => x.id === item.id);
+                if(idx > -1) {
+                    inventory[idx].qty = Math.max(0, inventory[idx].qty - item.qty);
+                    db.saveLog({
+                        productId: item.id,
+                        action: 'Sold (Checkout)',
+                        qtyChange: -item.qty,
+                        note: `Total Revenue: ₱${(item.price * item.qty).toFixed(2)}`
+                    });
+                }
+            });
+            db.saveInventory(inventory);
+            showToast("Checkout Complete!"); 
+            clearCart(); 
+            loadPosCatalog();
+        }
+
+        function formatDateTime(ms) {
+            let d = new Date(ms);
+            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function viewLogs(productId, productName) {
+            document.getElementById('logProductName').innerText = productName;
+            let logs = db.getLogs().filter(log => log.productId === productId);
+            logs.sort((a, b) => b.timestamp - a.timestamp);
+            const tbody = document.getElementById('logsTableBody');
+            tbody.innerHTML = "";
+            if(logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-[#B7A7BE]">No history yet.</td></tr>`;
+            } else {
+                logs.forEach(log => {
+                    let qtyColor = log.qtyChange > 0 ? "text-[#1F9D55]" : "text-[#C81E5C]";
+                    let prefix = log.qtyChange > 0 ? "+" : "";
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-white">
+                            <td class="py-2 px-2 text-[10px] text-[#6B5470] whitespace-nowrap">${formatDateTime(log.timestamp)}</td>
+                            <td class="py-2 px-2 text-[10px] font-medium text-[#2B1B33]">${log.action}</td>
+                            <td class="py-2 px-2 text-[10px] font-bold ${qtyColor}">${prefix}${log.qtyChange}</td>
+                            <td class="py-2 px-2 text-[10px] text-[#6B5470] truncate max-w-[120px]" title="${log.note}">${log.note}</td>
+                        </tr>
+                    `;
+                });
+            }
+            document.getElementById('logsModal').classList.remove('hidden');
+        }
+
+        function closeLogsModal() { document.getElementById('logsModal').classList.add('hidden'); }
+
+        function loadInventory() {
+            const tbody = document.getElementById('inventoryTableBody'); tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-[#B7A7BE]">Loading...</td></tr>`;
+            let inventory = db.getInventory();
+            inventory.sort((a, b) => b.timestamp - a.timestamp);
+            let totalStock = 0; allProductsCache = [];
+            inventory.forEach(p => { totalStock += (p.qty || 0); allProductsCache.push(p); });
+            renderInventoryTable(totalStock);
+        }
+        function filterInventoryByCategory(cat) { currentInventoryCategory = cat; loadCategoryDropdowns(); let ts = allProductsCache.reduce((s, p) => s + (p.qty||0), 0); renderInventoryTable(ts); }
+        function renderInventoryTable(totalStock) {
+            const tbody = document.getElementById('inventoryTableBody'); tbody.innerHTML = "";
+            let filtered = allProductsCache.filter(p => (currentInventoryCategory === 'All' || p.category === currentInventoryCategory));
+            if(filtered.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-[#B7A7BE]">No records.</td></tr>`; return; }
+            filtered.forEach(p => {
+                let price = getPrice(p.cost, totalStock);
+                tbody.innerHTML += `
+                    <tr class="hover:bg-white">
+                        <td class="py-2 px-1 flex items-center gap-1.5">
+                            ${p.image ? `<img src="${p.image}" class="w-6 h-6 rounded object-cover">` : `<div class="w-6 h-6 bg-[#FBF1F7] rounded"></div>`}
+                            <span class="font-medium text-[#2B1B33] w-24 truncate" title="${p.name}">${p.name}</span>
+                        </td>
+                        <td class="py-2 px-1 text-[#6B5470]">${p.category}</td>
+                        <td class="py-2 px-1 font-semibold text-[#C81E5C]">₱${price.toFixed(2)}</td>
+                        <td class="py-2 px-1 font-medium text-[#6B5470]">${p.qty}</td>
+                        <td class="py-2 px-1 text-right space-x-1">
+                            <button onclick="viewLogs('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="text-[#1F9D55] hover:underline text-[10px]">Logs</button>
+                            <button onclick="triggerEdit('${p.id}')" class="text-[#C81E5C] hover:underline mr-1 text-[10px]">Edit</button>
+                            <button onclick="deleteProduct('${p.id}')" class="text-[#DC2626] hover:underline text-[10px]">Del</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+        function deleteProduct(id) {
+            let inventory = db.getInventory();
+            inventory = inventory.filter(x => x.id !== id);
+            db.saveInventory(inventory);
+            loadInventory();
+            showToast("Product deleted.");
+        }
+        function filterInventory() { let input = document.getElementById('searchInventory').value.toLowerCase(); let rows = document.getElementById('inventoryTableBody').getElementsByTagName('tr'); for(let r of rows) r.style.display = r.innerText.toLowerCase().includes(input) ? "" : "none"; }
+
+        window.onload = function() {
+            clearProductForm();
+            loadCategoryDropdowns();
+            loadSetupConfigToUi();
+            loadPosCatalog();
+        }
+    </script>
+</body>
+</html>

@@ -33,8 +33,11 @@
                 <span class="text-2xl font-extrabold tracking-tight text-[#2B1B33]">Biz<span class="text-[#C81E5C]">Store</span></span>
                 <span class="bg-[#FFB800] text-[#2B1B33] text-[10px] font-extrabold px-1.5 py-0.5 rounded-md -rotate-3 shadow-sm">PH</span>
             </h1>
-            <nav class="flex space-x-2">
+            <nav class="flex space-x-2 items-center">
+                <span id="dbStatus" class="hidden"></span>
                 <button onclick="switchTab('pos')" id="nav-pos" class="px-4 py-1.5 rounded-full text-xs font-medium bg-[#C81E5C] text-white shadow-sm transition">My Store</button>
+                <button onclick="switchTab('orders')" id="nav-orders" class="px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition">Orders</button>
+                <button onclick="switchTab('schedule')" id="nav-schedule" class="px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition">Calendar</button>
                 <button onclick="switchTab('input')" id="nav-input" class="px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition">Add / Edit</button>
                 <button onclick="switchTab('inventory')" id="nav-inventory" class="px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition">Inventory</button>
                 <button onclick="switchTab('setup')" id="nav-setup" class="px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition">Setup & Financials</button>
@@ -75,7 +78,7 @@
                         <span class="text-xs font-medium text-[#6B5470]">Total:</span>
                         <span class="text-lg font-bold text-[#2B1B33]">₱<span id="cartTotalPrice">0.00</span></span>
                     </div>
-                    <button onclick="checkoutOrder()" class="w-full bg-[#FFB800] text-[#2B1B33] py-2.5 rounded-xl text-xs font-bold hover:bg-[#F0AC00] transition shadow-sm">Checkout</button>
+                    <button onclick="openCheckoutModal(event)" class="w-full bg-[#FFB800] text-[#2B1B33] py-2.5 rounded-xl text-xs font-bold hover:bg-[#F0AC00] transition shadow-sm">Checkout</button>
                 </div>
             </div>
         </section>
@@ -141,15 +144,25 @@
                             <label class="block font-medium text-[#6B5470] mb-1">Product Name</label>
                             <input type="text" id="prodName" required class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-3 gap-3">
                             <div>
-                                <label class="block font-medium text-[#6B5470] mb-1">Cost / Base Price (₱)</label>
-                                <input type="number" step="0.01" id="prodCost" required class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                                <label class="block font-medium text-[#6B5470] mb-1">Cost (₱)</label>
+                                <input type="number" step="0.01" id="prodCost" required oninput="updateMarkupPreview()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
+                            </div>
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block font-medium text-[#6B5470]">Selling Price (₱)</label>
+                                    <button type="button" onclick="clearSellingPrice()" class="text-[9px] text-[#C81E5C] hover:underline">Auto</button>
+                                </div>
+                                <input type="number" step="0.01" id="prodSellingPrice" oninput="updateMarkupPreview()" placeholder="Auto-compute if blank" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
                             </div>
                             <div>
                                 <label class="block font-medium text-[#6B5470] mb-1">Stock Qty</label>
                                 <input type="number" id="prodQty" required class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none">
                             </div>
+                        </div>
+                        <div class="text-[10px] text-[#6B5470] bg-[#FFF9F2] p-2 rounded border border-[#F2DCE8]">
+                            <strong>Markup / Profit Preview:</strong> <span id="markupPreviewText" class="font-medium text-[#2B1B33]">-</span>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
@@ -361,11 +374,72 @@
                     </div>
                     <div class="flex gap-2">
                         <button onclick="clearSetup()" class="bg-[#FBF1F7] text-[#6B5470] px-4 py-2.5 rounded-xl font-medium hover:bg-[#F6D9EA]">Reset</button>
-                        <button onclick="saveSetupConfig()" class="bg-[#C81E5C] text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-[#A61650] transition shadow-sm">Save Configuration</button>
+                        <button onclick="saveSetupConfig(event)" class="bg-[#C81E5C] text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-[#A61650] transition shadow-sm">Save Configuration</button>
                     </div>
                 </div>
             </div>
         </section>
+
+        <!-- TAB 5: ORDERS -->
+        <section id="tab-orders" class="hidden h-full">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-[#F2DCE8] h-full flex flex-col">
+                <div class="flex justify-between items-center gap-3 mb-3 shrink-0">
+                    <div class="flex gap-2">
+                        <select id="ordersStatusFilter" onchange="loadOrders()" class="px-3 py-1.5 border border-[#F2DCE8] rounded-lg text-xs outline-none bg-white">
+                            <option value="All">All Orders</option>
+                            <option value="Pending">Pending (Pre-order / Not Paid)</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <input type="text" id="searchOrders" onkeyup="filterOrdersUi()" placeholder="Search Customer..." class="px-3 py-1.5 border border-[#F2DCE8] rounded-full text-xs outline-none w-48 bg-[#FFF9F2]">
+                </div>
+                <div class="overflow-y-auto flex-grow">
+                    <table class="w-full text-left text-xs whitespace-nowrap">
+                        <thead class="sticky top-0 bg-white z-10">
+                            <tr class="border-b border-[#F2DCE8] text-[#8A7690] font-medium">
+                                <th class="py-2 px-2">Order ID</th>
+                                <th class="py-2 px-2">Date</th>
+                                <th class="py-2 px-2">Customer</th>
+                                <th class="py-2 px-2">Type</th>
+                                <th class="py-2 px-2">Payment</th>
+                                <th class="py-2 px-2">Total</th>
+                                <th class="py-2 px-2">Status</th>
+                                <th class="py-2 px-2 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersTableBody" class="divide-y divide-[#FBF1F7]"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 6: SCHEDULE / CALENDAR -->
+        <section id="tab-schedule" class="hidden h-full">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-[#F2DCE8] h-full flex flex-col">
+                <div class="flex justify-between items-center gap-3 mb-3 shrink-0">
+                    <h2 class="text-sm font-bold text-[#2B1B33]">📅 Appointments & Schedule</h2>
+                    <button onclick="openAppointmentModal()" class="bg-[#C81E5C] text-white px-3 py-1.5 rounded-lg text-xs font-semibold">+ Add Appointment</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 h-full overflow-hidden">
+                    <!-- Calendar View (Simple List for now) -->
+                    <div class="md:col-span-2 overflow-y-auto border border-[#F2DCE8] rounded-xl bg-[#FFF9F2] p-3">
+                        <div class="flex justify-between items-center mb-3">
+                            <button onclick="changeScheduleMonth(-1)" class="px-2 py-1 bg-white border border-[#F2DCE8] rounded">&lt;</button>
+                            <h3 id="scheduleMonthYear" class="font-bold text-sm text-[#2B1B33]">Month Year</h3>
+                            <button onclick="changeScheduleMonth(1)" class="px-2 py-1 bg-white border border-[#F2DCE8] rounded">&gt;</button>
+                        </div>
+                        <div id="scheduleList" class="space-y-2"></div>
+                    </div>
+                    <!-- Details / Up Next -->
+                    <div class="border border-[#F2DCE8] rounded-xl bg-white p-3 overflow-y-auto">
+                        <h3 class="font-bold text-xs text-[#6B5470] mb-2 border-b border-[#F2DCE8] pb-1">Up Next</h3>
+                        <div id="upNextAppointments" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- CATEGORY MODAL -->
@@ -492,987 +566,74 @@
         </div>
     </div>
 
+    <!-- CHECKOUT MODAL -->
+    <div id="checkoutModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-5 rounded-2xl shadow-xl w-[90%] max-w-sm border border-[#F2DCE8] text-xs">
+            <h3 class="font-bold text-[#2B1B33] text-sm mb-4 border-b border-[#F2DCE8] pb-2">Checkout Order</h3>
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="block font-medium text-[#6B5470] mb-1">Customer Name (Optional)</label>
+                    <input type="text" id="checkoutCustomer" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none" placeholder="Juan Dela Cruz">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">Order Type</label>
+                        <select id="checkoutType" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none bg-white">
+                            <option value="regular">Regular</option>
+                            <option value="pre-order">Pre-order</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">Payment Status</label>
+                        <select id="checkoutPayment" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none bg-white">
+                            <option value="paid">Paid</option>
+                            <option value="unpaid">Not Paid</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="closeCheckoutModal()" class="w-1/2 bg-[#FBF1F7] text-[#6B5470] py-2 rounded-lg font-medium">Cancel</button>
+                <button id="confirmCheckoutBtn" onclick="confirmCheckout(event)" class="w-1/2 bg-[#C81E5C] text-white py-2 rounded-lg font-semibold">Confirm Checkout</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APPOINTMENT MODAL -->
+    <div id="appointmentModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-5 rounded-2xl shadow-xl w-[90%] max-w-sm border border-[#F2DCE8] text-xs">
+            <h3 class="font-bold text-[#2B1B33] text-sm mb-4 border-b border-[#F2DCE8] pb-2">Add Appointment</h3>
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="block font-medium text-[#6B5470] mb-1">Customer Name</label>
+                    <input type="text" id="apptCustomer" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none" required>
+                </div>
+                <div>
+                    <label class="block font-medium text-[#6B5470] mb-1">Service / Title (e.g. Gluta Inject)</label>
+                    <input type="text" id="apptTitle" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none" required>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">Date</label>
+                        <input type="date" id="apptDate" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none bg-white" required>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-[#6B5470] mb-1">Time</label>
+                        <input type="time" id="apptTime" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none bg-white" required>
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="closeAppointmentModal()" class="w-1/2 bg-[#FBF1F7] text-[#6B5470] py-2 rounded-lg font-medium">Cancel</button>
+                <button onclick="saveAppointment(event)" class="w-1/2 bg-[#C81E5C] text-white py-2 rounded-lg font-semibold">Save Schedule</button>
+            </div>
+        </div>
+    </div>
+
     <canvas id="stickerCanvas" class="hidden"></canvas>
 
-    <script>
-        const db = {
-            getInventory: () => JSON.parse(localStorage.getItem('bizstore_inventory')) || [],
-            saveInventory: (data) => localStorage.setItem('bizstore_inventory', JSON.stringify(data)),
-            getLogs: () => JSON.parse(localStorage.getItem('bizstore_logs')) || [],
-            saveLog: (logData) => {
-                let logs = JSON.parse(localStorage.getItem('bizstore_logs')) || [];
-                logs.push({ ...logData, timestamp: Date.now() });
-                localStorage.setItem('bizstore_logs', JSON.stringify(logs));
-            },
-            generateId: () => 'id_' + Math.random().toString(36).substr(2, 9)
-        };
-
-        let categories = JSON.parse(localStorage.getItem('bizCategories')) || ["Skincare", "Cosmetics", "Apparel", "General"];
-        let html5QrCode = null; let snapshotStream = null; let capturedImageData = "";
-        let cart = []; let currentPosCategory = "All"; let currentInventoryCategory = "All"; let allProductsCache = [];
-        let financialChartInstance = null;
-
-        function showToast(message, isError = false) {
-            const toast = document.getElementById('toastNotif');
-            const icon = document.getElementById('toastIcon');
-            document.getElementById('toastMessage').innerText = message;
-            if (isError) {
-                toast.classList.add('toast-error');
-                icon.innerText = "!";
-            } else {
-                toast.classList.remove('toast-error');
-                icon.innerText = "✓";
-            }
-            toast.classList.remove('translate-x-full', 'opacity-0');
-            clearTimeout(window._toastTimer);
-            window._toastTimer = setTimeout(() => { toast.classList.add('translate-x-full', 'opacity-0'); }, 3000);
-        }
-
-        function switchTab(tabId) {
-            ['pos', 'input', 'inventory', 'setup'].forEach(t => {
-                document.getElementById(`tab-${t}`).classList.add('hidden');
-                document.getElementById(`nav-${t}`).className = "px-4 py-1.5 rounded-full text-xs font-medium text-[#6B5470] hover:bg-[#FBF1F7] transition";
-            });
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-            document.getElementById(`nav-${tabId}`).className = "px-4 py-1.5 rounded-full text-xs font-medium bg-[#C81E5C] text-white shadow-sm transition";
-            
-            if(tabId !== 'input') { stopScanner(); stopSnapshotCamera(); }
-            if(tabId === 'pos') { loadPosCatalog(); }
-            if(tabId === 'inventory') { loadInventory(); }
-            if(tabId === 'setup') { loadSetupConfigToUi(); }
-        }
-
-        function loadCategoryDropdowns() {
-            const select = document.getElementById('prodCategory'); select.innerHTML = "";
-            categories.forEach(cat => select.innerHTML += `<option value="${cat}">${cat}</option>`);
-            
-            const renderFilters = (containerId, currentCat, onClickFunc) => {
-                let html = `<button onclick="${onClickFunc}('All')" class="px-3 py-1 rounded-full ${currentCat === 'All' ? 'bg-[#C81E5C] text-white' : 'bg-white border border-[#F2DCE8] text-[#6B5470]'} font-medium shrink-0 text-[10px]">All</button>`;
-                categories.forEach(cat => {
-                    html += `<button onclick="${onClickFunc}('${cat}')" class="px-3 py-1 rounded-full ${currentCat === cat ? 'bg-[#C81E5C] text-white' : 'bg-white border border-[#F2DCE8] text-[#6B5470]'} font-medium shrink-0 text-[10px]">${cat}</button>`;
-                });
-                document.getElementById(containerId).innerHTML = html;
-            };
-            renderFilters('posCategoryFilters', currentPosCategory, 'filterPosByCategory');
-            renderFilters('inventoryCategoryFilters', currentInventoryCategory, 'filterInventoryByCategory');
-        }
-
-        function openCategoryModal() {
-            const list = document.getElementById('categoryListUi'); list.innerHTML = "";
-            categories.forEach((cat, i) => {
-                list.innerHTML += `<li class="flex justify-between bg-[#FFF9F2] p-2 rounded border border-[#F2DCE8]"><span>${cat}</span><button onclick="removeCategory(${i})" class="text-[#DC2626]">✕</button></li>`;
-            });
-            document.getElementById('categoryModal').classList.remove('hidden');
-        }
-        function closeCategoryModal() { document.getElementById('categoryModal').classList.add('hidden'); loadCategoryDropdowns(); }
-        function addCategory() {
-            let val = document.getElementById('newCategoryInput').value.trim();
-            if(val && !categories.includes(val)) { categories.push(val); localStorage.setItem('bizCategories', JSON.stringify(categories)); document.getElementById('newCategoryInput').value = ""; openCategoryModal(); }
-        }
-        function removeCategory(i) {
-            if(categories.length > 1) { categories.splice(i, 1); localStorage.setItem('bizCategories', JSON.stringify(categories)); openCategoryModal(); } else { showToast("Keep at least one category.", true); }
-        }
-
-        // --- SETUP & FINANCIAL MONITOR LOGIC ---
-        let setupData = {
-            rent: 0,
-            targetProfitPercent: 30,
-            employees: [],
-            subscriptions: [],
-            utilities: [],
-            packaging: [],
-            marketing: [],
-            permitsMisc: []
-        };
-
-        function getMonthlyKey(monthStr) {
-            return 'bizConfig_v6_' + (monthStr || new Date().toISOString().slice(0, 7));
-        }
-
-        function toggleFinancialViewMode() {
-            let modeEl = document.getElementById('financialViewMode');
-            if (!modeEl) return;
-            let mode = modeEl.value;
-            let container = document.getElementById('financialTimePickerContainer');
-            if (!container) return;
-
-            let today = new Date().toISOString().slice(0, 10);
-            let thisMonth = new Date().toISOString().slice(0, 7);
-            let thisYear = new Date().getFullYear();
-
-            if (mode === 'daily') {
-                container.innerHTML = `<input type="date" id="financialDateSelect" value="${today}" onchange="loadFinancials()" class="px-2.5 py-1 border border-[#F2DCE8] rounded-lg bg-white font-medium text-xs outline-none">`;
-            } else if (mode === 'monthly') {
-                container.innerHTML = `<input type="month" id="financialMonthSelect" value="${thisMonth}" onchange="loadFinancials()" class="px-2.5 py-1 border border-[#F2DCE8] rounded-lg bg-white font-medium text-xs outline-none">`;
-            } else {
-                let yearsHtml = `<select id="financialYearSelect" onchange="loadFinancials()" class="px-2.5 py-1 border border-[#F2DCE8] rounded-lg bg-white font-medium text-xs outline-none">`;
-                for (let y = thisYear; y >= thisYear - 3; y--) {
-                    yearsHtml += `<option value="${y}" ${y === thisYear ? 'selected' : ''}>${y}</option>`;
-                }
-                yearsHtml += `</select>`;
-                container.innerHTML = yearsHtml;
-            }
-            loadFinancials();
-        }
-
-        function loadSetupConfigToUi() {
-            let modeEl = document.getElementById('financialViewMode');
-            if(!modeEl || !modeEl.innerHTML) {
-                toggleFinancialViewMode();
-            } else {
-                loadFinancials();
-            }
-
-            let thisMonth = new Date().toISOString().slice(0, 7);
-            let saved = JSON.parse(localStorage.getItem(getMonthlyKey(thisMonth))) || JSON.parse(localStorage.getItem('bizConfig_v5')) || setupData;
-            setupData = saved;
-
-            document.getElementById('setupRent').value = setupData.rent || 0;
-            document.getElementById('setupTargetProfitPercent').value = setupData.targetProfitPercent || 30;
-            renderEmployeesTable();
-            renderDynamicList('subscriptions', setupData.subscriptions);
-            renderDynamicList('utilities', setupData.utilities);
-            renderDynamicList('packaging', setupData.packaging);
-            renderDynamicList('marketing', setupData.marketing);
-            renderDynamicList('permitsMisc', setupData.permitsMisc);
-            calculateTotalExpenses();
-        }
-
-        function loadFinancials() {
-            calculateTotalExpenses();
-            let modeEl = document.getElementById('financialViewMode');
-            if (!modeEl) return;
-            let mode = modeEl.value;
-            let logs = db.getLogs();
-            
-            let totalRevenue = 0;
-            let targetKey = "";
-
-            if (mode === 'daily') {
-                let el = document.getElementById('financialDateSelect');
-                targetKey = el ? el.value : new Date().toISOString().slice(0, 10);
-            } else if (mode === 'monthly') {
-                let el = document.getElementById('financialMonthSelect');
-                targetKey = el ? el.value : new Date().toISOString().slice(0, 7);
-            } else {
-                let el = document.getElementById('financialYearSelect');
-                targetKey = el ? el.value : new Date().getFullYear().toString();
-            }
-
-            // Chart data preparation
-            let chartLabels = [];
-            let chartRevenues = [];
-            let chartExpenses = [];
-
-            let monthlyFixed = (setupData.rent || 0) + (setupData.employees || []).reduce((s, e) => s + e.salary, 0) + (setupData.subscriptions || []).reduce((s, i) => s + i.cost, 0);
-            let monthlyVariable = (setupData.utilities || []).reduce((s, i) => s + i.cost, 0) + (setupData.packaging || []).reduce((s, i) => s + i.cost, 0) + (setupData.marketing || []).reduce((s, i) => s + i.cost, 0) + (setupData.permitsMisc || []).reduce((s, i) => s + i.cost, 0);
-            let totalMonthlyExpense = monthlyFixed + monthlyVariable;
-
-            if (mode === 'daily') {
-                // targetKey is YYYY-MM-DD. Let's show hourly or past hours / or just this day's summary vs past 7 days
-                // Let's show past 7 days ending on targetKey
-                let baseDate = new Date(targetKey);
-                for (let i = 6; i >= 0; i--) {
-                    let d = new Date(baseDate);
-                    d.setDate(baseDate.getDate() - i);
-                    let dStr = d.toISOString().slice(0, 10);
-                    chartLabels.push(dStr);
-
-                    let dayRev = 0;
-                    logs.forEach(log => {
-                        let lDate = new Date(log.timestamp).toISOString().slice(0, 10);
-                        if (lDate === dStr && log.action === 'Sold (Checkout)') {
-                            let m = log.note.match(/₱([\d,]+\.?\d*)/);
-                            if (m && m[1]) dayRev += parseFloat(m[1].replace(/,/g, '')) || 0;
-                        }
-                    });
-                    chartRevenues.push(dayRev);
-                    chartExpenses.push(totalMonthlyExpense / 30);
-                }
-
-                // Calculate target day total revenue
-                logs.forEach(log => {
-                    let logDate = new Date(log.timestamp);
-                    let logDateStr = logDate.toISOString().slice(0, 10);
-                    if (logDateStr === targetKey && log.action === 'Sold (Checkout)') {
-                        let m = log.note.match(/₱([\d,]+\.?\d*)/);
-                        if (m && m[1]) totalRevenue += parseFloat(m[1].replace(/,/g, '')) || 0;
-                    }
-                });
-            } else if (mode === 'monthly') {
-                // targetKey is YYYY-MM. Show days of that month or weeks
-                let [year, month] = targetKey.split('-').map(Number);
-                let daysInMonth = new Date(year, month, 0).getDate();
-                
-                for (let day = 1; day <= daysInMonth; day++) {
-                    let dayStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    chartLabels.push(dayStr);
-
-                    let dayRev = 0;
-                    logs.forEach(log => {
-                        let lDate = new Date(log.timestamp).toISOString().slice(0, 10);
-                        if (lDate === dayStr && log.action === 'Sold (Checkout)') {
-                            let m = log.note.match(/₱([\d,]+\.?\d*)/);
-                            if (m && m[1]) dayRev += parseFloat(m[1].replace(/,/g, '')) || 0;
-                        }
-                    });
-                    chartRevenues.push(dayRev);
-                    chartExpenses.push(totalMonthlyExpense / daysInMonth);
-                }
-
-                logs.forEach(log => {
-                    let logDate = new Date(log.timestamp);
-                    let logMonthStr = logDate.toISOString().slice(0, 7);
-                    if (logMonthStr === targetKey && log.action === 'Sold (Checkout)') {
-                        let m = log.note.match(/₱([\d,]+\.?\d*)/);
-                        if (m && m[1]) totalRevenue += parseFloat(m[1].replace(/,/g, '')) || 0;
-                    }
-                });
-            } else {
-                // annual: targetKey is YYYY. Show months Jan to Dec
-                let year = parseInt(targetKey);
-                let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                chartLabels = monthNames;
-
-                for (let m = 1; m <= 12; m++) {
-                    let mStr = `${year}-${String(m).padStart(2, '0')}`;
-                    let mRev = 0;
-                    logs.forEach(log => {
-                        let lMonth = new Date(log.timestamp).toISOString().slice(0, 7);
-                        if (lMonth === mStr && log.action === 'Sold (Checkout)') {
-                            let match = log.note.match(/₱([\d,]+\.?\d*)/);
-                            if (match && match[1]) mRev += parseFloat(match[1].replace(/,/g, '')) || 0;
-                        }
-                    });
-                    chartRevenues.push(mRev);
-                    chartExpenses.push(totalMonthlyExpense);
-                }
-
-                logs.forEach(log => {
-                    let logDate = new Date(log.timestamp);
-                    let logYearStr = logDate.getFullYear().toString();
-                    if (logYearStr === targetKey && log.action === 'Sold (Checkout)') {
-                        let m = log.note.match(/₱([\d,]+\.?\d*)/);
-                        if (m && m[1]) totalRevenue += parseFloat(m[1].replace(/,/g, '')) || 0;
-                    }
-                });
-            }
-
-            let totalExpenses = 0;
-            if (mode === 'daily') {
-                totalExpenses = totalMonthlyExpense / 30;
-            } else if (mode === 'monthly') {
-                totalExpenses = totalMonthlyExpense;
-            } else {
-                totalExpenses = totalMonthlyExpense * 12;
-            }
-
-            let netProfit = totalRevenue - totalExpenses;
-            let margin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
-
-            document.getElementById('metricRevenue').innerText = `₱${totalRevenue.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-            document.getElementById('metricExpenses').innerText = `₱${totalExpenses.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-            
-            let profitEl = document.getElementById('metricNetProfit');
-            profitEl.innerText = `₱${netProfit.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-            profitEl.className = `text-base font-bold ${netProfit >= 0 ? 'text-[#1F9D55]' : 'text-[#DC2626]'}`;
-
-            document.getElementById('metricMargin').innerText = `${margin.toFixed(1)}%`;
-
-            let advice = document.getElementById('financialAdvice');
-            if (netProfit < 0) {
-                advice.innerText = "⚠️ Lugi sa napiling panahon! Subukang taasan ang Target Markup Profit % o bawasan ang overhead.";
-                advice.className = "text-[10px] text-[#DC2626] font-semibold italic";
-            } else {
-                advice.innerText = "✨ Maganda ang performance! Kumikita ka sa panahong ito. Ipagpatuloy ang pagsubaybay.";
-                advice.className = "text-[10px] text-[#1F9D55] font-semibold italic";
-            }
-
-            // Render Chart.js
-            renderFinancialChart(chartLabels, chartRevenues, chartExpenses);
-        }
-
-        function renderFinancialChart(labels, revenues, expenses) {
-            const ctx = document.getElementById('financialChart').getContext('2d');
-            if (financialChartInstance) {
-                financialChartInstance.destroy();
-            }
-            financialChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Revenue (₱)',
-                            data: revenues,
-                            borderColor: '#1F9D55',
-                            backgroundColor: 'rgba(31, 157, 85, 0.1)',
-                            fill: true,
-                            tension: 0.3
-                        },
-                        {
-                            label: 'Expenses (₱)',
-                            data: expenses,
-                            borderColor: '#DC2626',
-                            backgroundColor: 'rgba(220, 38, 38, 0.05)',
-                            fill: true,
-                            tension: 0.3
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } }
-                    },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { font: { size: 9 } } },
-                        x: { ticks: { font: { size: 9 } } }
-                    }
-                }
-            });
-        }
-
-        function renderDynamicList(key, items) {
-            const container = document.getElementById(`${key}List`);
-            container.innerHTML = "";
-            if(!items || items.length === 0) {
-                container.innerHTML = `<p class="text-[10px] text-[#B7A7BE]">No items.</p>`;
-                return;
-            }
-            items.forEach((item, index) => {
-                container.innerHTML += `
-                    <div class="flex gap-1.5 items-center bg-white p-1.5 rounded-lg border border-[#F2DCE8]">
-                        <input type="text" value="${item.name}" oninput="updateDynamicItem('${key}', ${index}, 'name', this.value)" placeholder="Name" class="flex-grow px-2 py-1 text-[11px] outline-none">
-                        <input type="number" value="${item.cost}" oninput="updateDynamicItem('${key}', ${index}, 'cost', this.value)" placeholder="Cost" class="w-20 px-2 py-1 text-[11px] outline-none text-right font-medium text-[#C81E5C]">
-                        <button type="button" onclick="removeDynamicItem('${key}', ${index})" class="text-[#DC2626] px-1 font-bold">×</button>
-                    </div>
-                `;
-            });
-        }
-
-        function addDynamicItem(key) {
-            if(!setupData[key]) setupData[key] = [];
-            setupData[key].push({ id: db.generateId(), name: '', cost: 0 });
-            renderDynamicList(key, setupData[key]);
-            calculateTotalExpenses();
-        }
-
-        function updateDynamicItem(key, index, field, value) {
-            setupData[key][index][field] = field === 'cost' ? parseFloat(value) || 0 : value;
-            calculateTotalExpenses();
-        }
-
-        function removeDynamicItem(key, index) {
-            setupData[key].splice(index, 1);
-            renderDynamicList(key, setupData[key]);
-            calculateTotalExpenses();
-        }
-
-        function openEmployeeModal(empId = null) {
-            document.getElementById('editEmpId').value = empId || '';
-            if(empId) {
-                let emp = setupData.employees.find(e => e.id === empId);
-                if(emp) {
-                    document.getElementById('empModalTitle').innerText = "Edit Employee";
-                    document.getElementById('empName').value = emp.name;
-                    document.getElementById('empSalary').value = emp.salary;
-                    document.getElementById('empSSS').value = emp.sss;
-                    document.getElementById('empPhilhealth').value = emp.philhealth;
-                    document.getElementById('empPagibig').value = emp.pagibig;
-                    document.getElementById('empTax').value = emp.tax;
-                }
-            } else {
-                document.getElementById('empModalTitle').innerText = "Add Employee";
-                document.getElementById('empName').value = '';
-                document.getElementById('empSalary').value = '';
-                document.getElementById('empSSS').value = 0;
-                document.getElementById('empPhilhealth').value = 0;
-                document.getElementById('empPagibig').value = 0;
-                document.getElementById('empTax').value = 0;
-            }
-            document.getElementById('employeeModal').classList.remove('hidden');
-        }
-
-        function closeEmployeeModal() { document.getElementById('employeeModal').classList.add('hidden'); }
-
-        function saveEmployee() {
-            let id = document.getElementById('editEmpId').value;
-            let name = document.getElementById('empName').value.trim();
-            let salary = parseFloat(document.getElementById('empSalary').value) || 0;
-            let sss = parseFloat(document.getElementById('empSSS').value) || 0;
-            let philhealth = parseFloat(document.getElementById('empPhilhealth').value) || 0;
-            let pagibig = parseFloat(document.getElementById('empPagibig').value) || 0;
-            let tax = parseFloat(document.getElementById('empTax').value) || 0;
-
-            if(!name) { showToast("Please enter employee name.", true); return; }
-
-            if(id) {
-                let idx = setupData.employees.findIndex(e => e.id === id);
-                if(idx > -1) setupData.employees[idx] = { id, name, salary, sss, philhealth, pagibig, tax };
-            } else {
-                setupData.employees.push({ id: db.generateId(), name, salary, sss, philhealth, pagibig, tax });
-            }
-            closeEmployeeModal();
-            renderEmployeesTable();
-            calculateTotalExpenses();
-        }
-
-        function deleteEmployee(id) {
-            setupData.employees = setupData.employees.filter(e => e.id !== id);
-            renderEmployeesTable();
-            calculateTotalExpenses();
-        }
-
-        function renderEmployeesTable() {
-            const tbody = document.getElementById('employeeTableBody');
-            tbody.innerHTML = "";
-            if(!setupData.employees || setupData.employees.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="py-3 text-center text-[#B7A7BE]">No employees added yet.</td></tr>`;
-                return;
-            }
-            setupData.employees.forEach(emp => {
-                let totalDeductions = emp.sss + emp.philhealth + emp.pagibig + emp.tax;
-                let netPay = emp.salary - totalDeductions;
-                tbody.innerHTML += `
-                    <tr class="border-b border-[#FBF1F7] hover:bg-white">
-                        <td class="py-2 px-2 font-medium text-[#2B1B33]">${emp.name}</td>
-                        <td class="py-2 px-2">₱${emp.salary.toFixed(2)}</td>
-                        <td class="py-2 px-2 text-[#8A7690]">₱${(emp.sss + emp.philhealth + emp.pagibig).toFixed(2)}</td>
-                        <td class="py-2 px-2 text-[#8A7690]">₱${emp.tax.toFixed(2)}</td>
-                        <td class="py-2 px-2 font-bold text-[#C81E5C]">₱${netPay.toFixed(2)}</td>
-                        <td class="py-2 px-2 text-right space-x-1">
-                            <button onclick="generatePayslip('${emp.id}')" class="text-[#1F9D55] font-medium hover:underline text-[10px]">Payslip</button>
-                            <button onclick="openEmployeeModal('${emp.id}')" class="text-[#C81E5C] font-medium hover:underline text-[10px]">Edit</button>
-                            <button onclick="deleteEmployee('${emp.id}')" class="text-[#DC2626] font-medium hover:underline text-[10px]">Del</button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        function generatePayslip(empId) {
-            let emp = setupData.employees.find(e => e.id === empId);
-            if(!emp) return;
-            document.getElementById('payslipDateIssued').innerText = "Issued: " + new Date().toLocaleDateString();
-            document.getElementById('psName').innerText = emp.name;
-            document.getElementById('psBasic').innerText = emp.salary.toFixed(2);
-            document.getElementById('psSSS').innerText = emp.sss.toFixed(2);
-            document.getElementById('psPhilhealth').innerText = emp.philhealth.toFixed(2);
-            document.getElementById('psPagibig').innerText = emp.pagibig.toFixed(2);
-            document.getElementById('psTax').innerText = emp.tax.toFixed(2);
-            let totalDed = emp.sss + emp.philhealth + emp.pagibig + emp.tax;
-            document.getElementById('psTotalDeductions').innerText = totalDed.toFixed(2);
-            document.getElementById('psNetPay').innerText = (emp.salary - totalDed).toFixed(2);
-            document.getElementById('payslipModal').classList.remove('hidden');
-        }
-
-        function closePayslipModal() { document.getElementById('payslipModal').classList.add('hidden'); }
-
-        function calculateTotalExpenses() {
-            let rent = parseFloat(document.getElementById('setupRent').value) || 0;
-            setupData.rent = rent;
-            setupData.targetProfitPercent = parseFloat(document.getElementById('setupTargetProfitPercent').value) || 30;
-
-            let totalPayroll = setupData.employees.reduce((sum, e) => sum + e.salary, 0);
-            let totalSubscriptions = (setupData.subscriptions || []).reduce((sum, item) => sum + item.cost, 0);
-            let totalFixed = rent + totalPayroll + totalSubscriptions;
-
-            let totalUtilities = (setupData.utilities || []).reduce((sum, item) => sum + item.cost, 0);
-            let totalPackaging = (setupData.packaging || []).reduce((sum, item) => sum + item.cost, 0);
-            let totalMarketing = (setupData.marketing || []).reduce((sum, item) => sum + item.cost, 0);
-            let totalPermitsMisc = (setupData.permitsMisc || []).reduce((sum, item) => sum + item.cost, 0);
-            let totalVariable = totalUtilities + totalPackaging + totalMarketing + totalPermitsMisc;
-
-            let grandTotal = totalFixed + totalVariable;
-
-            document.getElementById('totalFixedHeaderDisplay').innerText = `Total: ₱${totalFixed.toFixed(2)}`;
-            document.getElementById('totalVariableHeaderDisplay').innerText = `Total: ₱${totalVariable.toFixed(2)}`;
-            document.getElementById('grandTotalOverheadDisplay').innerText = `₱${grandTotal.toFixed(2)}`;
-        }
-
-        function clearSetup() {
-            let thisMonth = new Date().toISOString().slice(0, 7);
-            localStorage.removeItem(getMonthlyKey(thisMonth));
-            setupData = { rent: 0, targetProfitPercent: 30, employees: [], subscriptions: [], utilities: [], packaging: [], marketing: [], permitsMisc: [] };
-            loadSetupConfigToUi();
-            showToast("Setup cleared.");
-        }
-
-        function saveSetupConfig() {
-            calculateTotalExpenses();
-            let thisMonth = new Date().toISOString().slice(0, 7);
-            localStorage.setItem(getMonthlyKey(thisMonth), JSON.stringify(setupData));
-            showToast("Setup & Monthly Expenses saved!");
-            loadFinancials();
-        }
-
-        function getPrice(cost, totalStock) {
-            let thisMonth = new Date().toISOString().slice(0, 7);
-            let cfg = JSON.parse(localStorage.getItem(getMonthlyKey(thisMonth))) || setupData;
-            let totalFixed = (cfg.rent || 0) + (cfg.employees || []).reduce((s, e) => s + e.salary, 0) + (cfg.subscriptions || []).reduce((s, i) => s + i.cost, 0);
-            let totalVariable = (cfg.utilities || []).reduce((s, i) => s + i.cost, 0) + (cfg.packaging || []).reduce((s, i) => s + i.cost, 0) + (cfg.marketing || []).reduce((s, i) => s + i.cost, 0) + (cfg.permitsMisc || []).reduce((s, i) => s + i.cost, 0);
-            let totalOverhead = totalFixed + totalVariable;
-
-            let overheadPerUnit = totalOverhead / (totalStock > 0 ? totalStock : 1);
-            let markup = (cfg.targetProfitPercent !== undefined ? cfg.targetProfitPercent : 30) / 100;
-            return (cost + overheadPerUnit) * (1 + markup);
-        }
-
-        // --- BARCODE SCANNER ---
-        function startScanner(elementId, statusElId, onSuccess) {
-            const statusEl = statusElId ? document.getElementById(statusElId) : null;
-            if (!window.isSecureContext && location.hostname !== "localhost") {
-                if(statusEl) statusEl.innerText = "HTTPS required";
-                showToast("Camera requires HTTPS or localhost.", true);
-                return;
-            }
-
-            if (html5QrCode) {
-                html5QrCode.stop().then(() => initCam()).catch(() => initCam());
-            } else {
-                html5QrCode = new Html5Qrcode(elementId);
-                initCam();
-            }
-
-            function initCam() {
-                Html5Qrcode.getCameras().then(cameras => {
-                    if (!cameras || cameras.length === 0) {
-                        if(statusEl) statusEl.innerText = "No camera";
-                        showToast("Walang nahanap na camera.", true);
-                        return;
-                    }
-                    let camId = cameras[0].id; 
-                    let backCam = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('environment'));
-                    if(backCam) camId = backCam.id;
-
-                    html5QrCode.start(
-                        camId, 
-                        { fps: 10, qrbox: { width: 220, height: 120 } },
-                        (decodedText) => { onSuccess(decodedText); },
-                        (scanErr) => {}
-                    ).then(() => {
-                        if(statusEl) statusEl.innerText = "Active";
-                    }).catch(err => {
-                        if(statusEl) statusEl.innerText = "Error";
-                        showToast("Hindi ma-start ang scanner: " + err, true);
-                    });
-                }).catch(err => {
-                    if(statusEl) statusEl.innerText = "Denied";
-                    showToast("Camera access denied: " + err, true);
-                });
-            }
-        }
-
-        function stopScanner() {
-            if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().then(() => { 
-                    const stat = document.getElementById('scannerStatus');
-                    if(stat) stat.innerText = ""; 
-                }).catch(() => {});
-            }
-        }
-
-        function startAddScanner() {
-            startScanner("reader", "scannerStatus", (decodedText) => {
-                document.getElementById('prodBarcode').value = decodedText;
-                stopScanner();
-                showToast("Barcode Scanned: " + decodedText);
-            });
-        }
-
-        function openPosScannerModal() {
-            document.getElementById('posScannerModal').classList.remove('hidden');
-            startScanner("posReader", "posScannerStatus", (decodedText) => {
-                stopScanner();
-                document.getElementById('posScannerModal').classList.add('hidden');
-                let inv = db.getInventory();
-                let item = inv.find(x => x.barcode === decodedText);
-                if(item) {
-                    let totalStock = inv.reduce((s, p) => s + (p.qty||0), 0);
-                    let price = getPrice(item.cost, totalStock);
-                    addToCart(item.id, item.name, price, item.qty);
-                    showToast("Added via Scan: " + item.name);
-                } else {
-                    showToast("Item not found for barcode!", true);
-                }
-            });
-        }
-
-        function closePosScannerModal() {
-            stopScanner();
-            document.getElementById('posScannerModal').classList.add('hidden');
-        }
-
-        function generateAutoBarcode() { 
-            document.getElementById('prodBarcode').value = 'BPH-' + Math.floor(10000 + Math.random() * 90000); 
-        }
-
-        function downloadBarcodeSticker() {
-            let barcodeVal = document.getElementById('prodBarcode').value.trim();
-            if(!barcodeVal) { showToast("Please enter or generate a barcode first.", true); return; }
-            try {
-                let canvas = document.getElementById('stickerCanvas');
-                JsBarcode(canvas, barcodeVal, { format: "CODE128", displayValue: true, fontSize: 16, margin: 10, width: 2, height: 80 });
-                let link = document.createElement('a');
-                link.download = `BizStore-Barcode-${barcodeVal}.png`;
-                link.href = canvas.toDataURL("image/png");
-                link.click();
-                showToast("Barcode downloaded successfully!");
-            } catch (err) {
-                showToast("Failed to generate barcode image.", true);
-            }
-        }
-
-        function startSnapshotCamera() {
-            const video = document.getElementById('snapshotVideo');
-            navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-                snapshotStream = stream; video.srcObject = stream; video.classList.remove('hidden');
-                document.getElementById('camPlaceholder').classList.add('hidden'); document.getElementById('snapshotPreview').classList.add('hidden');
-            }).catch((err)=>{ showToast("Hindi ma-access ang camera: " + err, true); });
-        }
-        function takeSnapshot() {
-            if (!snapshotStream) return;
-            const video = document.getElementById('snapshotVideo'); const canvas = document.getElementById('snapshotCanvas'); const preview = document.getElementById('snapshotPreview');
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight; canvas.getContext('2d').drawImage(video, 0, 0);
-            capturedImageData = canvas.toDataURL('image/jpeg'); preview.src = capturedImageData;
-            preview.classList.remove('hidden'); video.classList.add('hidden'); stopSnapshotCamera();
-        }
-        function stopSnapshotCamera() { if(snapshotStream) { snapshotStream.getTracks().forEach(t => t.stop()); snapshotStream = null; } }
-
-        function toggleExpiryMode() {
-            let mode = document.querySelector('input[name="expiryMode"]:checked').value;
-            if (mode === 'date') {
-                document.getElementById('prodExpiryDate').classList.remove('hidden');
-                document.getElementById('expiryMonthsWrap').classList.add('hidden');
-            } else {
-                document.getElementById('prodExpiryDate').classList.add('hidden');
-                document.getElementById('expiryMonthsWrap').classList.remove('hidden');
-                updateComputedExpiry();
-            }
-        }
-        function updateComputedExpiry() {
-            let mode = document.querySelector('input[name="expiryMode"]:checked').value;
-            if (mode !== 'months') return;
-            let months = parseInt(document.getElementById('prodExpiryMonths').value);
-            let dateInVal = document.getElementById('prodDate').value;
-            let display = document.getElementById('computedExpiryDisplay');
-            if (!months || !dateInVal) { display.innerText = "-"; return; }
-            let d = new Date(dateInVal + "T00:00:00");
-            d.setMonth(d.getMonth() + months);
-            display.innerText = d.toISOString().split('T')[0];
-        }
-        function computeExpiryDate() {
-            let mode = document.querySelector('input[name="expiryMode"]:checked').value;
-            if (mode === 'date') return document.getElementById('prodExpiryDate').value;
-            let months = parseInt(document.getElementById('prodExpiryMonths').value);
-            let dateInVal = document.getElementById('prodDate').value;
-            if (!months || !dateInVal) return "";
-            let d = new Date(dateInVal + "T00:00:00");
-            d.setMonth(d.getMonth() + months);
-            return d.toISOString().split('T')[0];
-        }
-        function resetExpiryUi() {
-            document.querySelector('input[name="expiryMode"][value="date"]').checked = true;
-            document.getElementById('prodExpiryDate').classList.remove('hidden');
-            document.getElementById('prodExpiryDate').value = "";
-            document.getElementById('expiryMonthsWrap').classList.add('hidden');
-            document.getElementById('prodExpiryMonths').value = "";
-            document.getElementById('computedExpiryDisplay').innerText = "-";
-        }
-
-        function clearProductForm() {
-            document.getElementById('productForm').reset();
-            document.getElementById('editProductId').value = "";
-            document.getElementById('formTitle').innerText = "✨ Add New Product";
-            document.getElementById('submitBtn').innerText = "Save Product";
-            document.getElementById('submitBtn').disabled = false;
-            document.getElementById('snapshotPreview').src = "";
-            document.getElementById('snapshotPreview').classList.add('hidden');
-            document.getElementById('camPlaceholder').classList.remove('hidden');
-            capturedImageData = "";
-            document.getElementById('prodDate').valueAsDate = new Date();
-            resetExpiryUi();
-        }
-
-        function resolveProductImage() {
-            return new Promise((resolve) => {
-                if (capturedImageData && capturedImageData.startsWith('data:')) {
-                    resolve(capturedImageData);
-                } else {
-                    let existingSrc = document.getElementById('snapshotPreview').src;
-                    let isRealImage = existingSrc && (existingSrc.startsWith('http') || existingSrc.startsWith('data:')) && existingSrc !== window.location.href;
-                    resolve(isRealImage ? existingSrc : "");
-                }
-            });
-        }
-
-        function saveProduct(e) {
-            e.preventDefault();
-            const submitBtn = document.getElementById('submitBtn');
-            let barcodeInput = document.getElementById('prodBarcode').value.trim();
-            let id = document.getElementById('editProductId').value;
-            let expiryDate = computeExpiryDate();
-
-            if (document.querySelector('input[name="expiryMode"]:checked').value === 'months' && !expiryDate) {
-                showToast("Please specify months for expiry.", true);
-                return;
-            }
-
-            submitBtn.disabled = true;
-            submitBtn.innerText = "Saving...";
-            let inputQty = parseInt(document.getElementById('prodQty').value);
-
-            resolveProductImage().then((imageUrl) => {
-                const product = {
-                    category: document.getElementById('prodCategory').value,
-                    barcode: barcodeInput,
-                    name: document.getElementById('prodName').value,
-                    cost: parseFloat(document.getElementById('prodCost').value),
-                    qty: inputQty,
-                    dateIn: document.getElementById('prodDate').value,
-                    expiryDate: expiryDate,
-                    image: imageUrl || "",
-                    timestamp: Date.now()
-                };
-
-                let inventory = db.getInventory();
-
-                if (id) {
-                    let idx = inventory.findIndex(x => x.id === id);
-                    if(idx > -1) {
-                        let oldQty = inventory[idx].qty;
-                        let qtyDiff = inputQty - oldQty;
-                        product.id = id;
-                        product.timestamp = inventory[idx].timestamp; 
-                        inventory[idx] = product;
-                        db.saveInventory(inventory);
-
-                        if(qtyDiff !== 0) {
-                            db.saveLog({
-                                productId: id,
-                                action: qtyDiff > 0 ? 'Stock Adjustment (In)' : 'Stock Adjustment (Out)',
-                                qtyChange: qtyDiff,
-                                note: 'Manual update via Add/Edit form'
-                            });
-                        }
-                        showToast("Product updated successfully!");
-                        clearProductForm();
-                    }
-                } else {
-                    if (inventory.some(x => x.barcode === barcodeInput)) {
-                        showToast("Barcode already exists!", true);
-                    } else {
-                        product.id = db.generateId();
-                        inventory.push(product);
-                        db.saveInventory(inventory);
-                        db.saveLog({
-                            productId: product.id,
-                            action: 'Initial Stock In',
-                            qtyChange: inputQty,
-                            note: 'New product added'
-                        });
-                        showToast("Product saved successfully!");
-                        clearProductForm();
-                    }
-                }
-            }).catch(err => {
-                showToast("Error: " + err.message, true);
-            }).finally(() => {
-                submitBtn.disabled = false;
-                submitBtn.innerText = id ? "Update Product" : "Save Product";
-            });
-        }
-
-        function triggerEdit(id) {
-            let p = allProductsCache.find(x => x.id === id);
-            if(p) {
-                switchTab('input');
-                document.getElementById('formTitle').innerText = "✏️ Edit Product";
-                document.getElementById('submitBtn').innerText = "Update Product";
-                document.getElementById('editProductId').value = p.id;
-                document.getElementById('prodCategory').value = p.category;
-                document.getElementById('prodBarcode').value = p.barcode;
-                document.getElementById('prodName').value = p.name;
-                document.getElementById('prodCost').value = p.cost;
-                document.getElementById('prodQty').value = p.qty;
-                document.getElementById('prodDate').value = p.dateIn;
-                resetExpiryUi();
-                document.getElementById('prodExpiryDate').value = p.expiryDate || "";
-                if(p.image && p.image.length > 50) {
-                    capturedImageData = "";
-                    document.getElementById('snapshotPreview').src = p.image;
-                    document.getElementById('snapshotPreview').classList.remove('hidden');
-                    document.getElementById('camPlaceholder').classList.add('hidden');
-                } else {
-                    capturedImageData = "";
-                    document.getElementById('snapshotPreview').classList.add('hidden');
-                    document.getElementById('camPlaceholder').classList.remove('hidden');
-                }
-            }
-        }
-
-        function loadPosCatalog() {
-            const grid = document.getElementById('posCatalogGrid'); grid.innerHTML = `<p class="col-span-full text-center text-[#B7A7BE] text-xs">Loading...</p>`;
-            let inventory = db.getInventory();
-            inventory.sort((a, b) => b.timestamp - a.timestamp);
-            let totalStock = 0; allProductsCache = [];
-            inventory.forEach(p => { totalStock += (p.qty || 0); allProductsCache.push(p); });
-            renderPosFilteredProducts(totalStock);
-        }
-        function filterPosByCategory(cat) { currentPosCategory = cat; loadCategoryDropdowns(); let ts = allProductsCache.reduce((s, p) => s + (p.qty||0), 0); renderPosFilteredProducts(ts); }
-        function renderPosFilteredProducts(totalStock) {
-            const grid = document.getElementById('posCatalogGrid'); grid.innerHTML = "";
-            let filtered = allProductsCache.filter(p => (currentPosCategory === 'All' || p.category === currentPosCategory));
-            if(filtered.length === 0) { grid.innerHTML = `<p class="col-span-full text-center text-[#B7A7BE] text-xs">No items.</p>`; return; }
-            filtered.forEach(p => {
-                let price = getPrice(p.cost, totalStock);
-                let photo = p.image ? `<img src="${p.image}" class="w-full aspect-square object-cover">` : `<div class="w-full aspect-square bg-[#FBF1F7] flex items-center justify-center text-[8px] text-[#B7A7BE]">No Photo</div>`;
-                grid.innerHTML += `
-                    <div onclick="addToCart('${p.id}', '${p.name.replace(/'/g, "\\'")}', ${price}, ${p.qty})" class="bg-white rounded-lg shadow-sm border border-[#F2DCE8] overflow-hidden cursor-pointer flex flex-col">
-                        ${photo}
-                        <div class="p-1.5 flex flex-col flex-grow">
-                            <h3 class="font-medium text-[#2B1B33] text-[10px] leading-tight line-clamp-2">${p.name}</h3>
-                            <div class="mt-auto flex justify-between items-end pt-1">
-                                <span class="text-[#C81E5C] font-bold text-[11px]">₱${price.toFixed(2)}</span>
-                                <span class="text-[8px] text-[#8A7690]">Qty:${p.qty}</span>
-                            </div>
-                        </div>
-                    </div>`;
-            });
-        }
-        function filterPosCatalog() { let input = document.getElementById('posSearch').value.toLowerCase(); let cards = document.getElementById('posCatalogGrid').children; for(let c of cards) c.style.display = c.innerText.toLowerCase().includes(input) ? "flex" : "none"; }
-
-        function addToCart(id, name, price, maxQty) {
-            if(maxQty <= 0) { showToast("Out of stock!", true); return; }
-            let item = cart.find(i => i.id === id);
-            if(item) { if(item.qty < maxQty) item.qty++; else showToast("Max stock reached.", true); } else { cart.push({ id, name, price, qty: 1, maxQty }); }
-            renderCart();
-        }
-        function removeFromCart(i) { cart.splice(i, 1); renderCart(); }
-        function clearCart() { cart = []; renderCart(); }
-        function renderCart() {
-            let container = document.getElementById('cartList');
-            if(cart.length === 0) { container.innerHTML = `<p class="text-[#B7A7BE] text-center py-4">Cart empty.</p>`; document.getElementById('cartTotalPrice').innerText = "0.00"; return; }
-            container.innerHTML = ""; let total = 0;
-            cart.forEach((item, i) => {
-                let subtotal = item.price * item.qty; total += subtotal;
-                container.innerHTML += `
-                    <div class="flex justify-between items-center py-1 border-b border-[#FBF1F7] last:border-0">
-                        <div class="w-2/3">
-                            <p class="font-medium text-[#2B1B33] truncate text-[11px]">${item.name}</p>
-                            <p class="text-[9px] text-[#8A7690]">₱${item.price.toFixed(2)} x ${item.qty}</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="font-semibold text-[#2B1B33] text-[11px]">₱${subtotal.toFixed(2)}</span>
-                            <button onclick="removeFromCart(${i})" class="text-[#DC2626] hover:text-red-700 bg-[#FFF9F2] px-1.5 rounded font-bold">×</button>
-                        </div>
-                    </div>`;
-            });
-            document.getElementById('cartTotalPrice').innerText = total.toLocaleString('en-US', {minimumFractionDigits: 2});
-        }
-
-        function checkoutOrder() {
-            if(cart.length === 0) return;
-            let inventory = db.getInventory();
-            cart.forEach(item => {
-                let idx = inventory.findIndex(x => x.id === item.id);
-                if(idx > -1) {
-                    inventory[idx].qty = Math.max(0, inventory[idx].qty - item.qty);
-                    db.saveLog({
-                        productId: item.id,
-                        action: 'Sold (Checkout)',
-                        qtyChange: -item.qty,
-                        note: `Total Revenue: ₱${(item.price * item.qty).toFixed(2)}`
-                    });
-                }
-            });
-            db.saveInventory(inventory);
-            showToast("Checkout Complete!"); 
-            clearCart(); 
-            loadPosCatalog();
-        }
-
-        function formatDateTime(ms) {
-            let d = new Date(ms);
-            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        }
-
-        function viewLogs(productId, productName) {
-            document.getElementById('logProductName').innerText = productName;
-            let logs = db.getLogs().filter(log => log.productId === productId);
-            logs.sort((a, b) => b.timestamp - a.timestamp);
-            const tbody = document.getElementById('logsTableBody');
-            tbody.innerHTML = "";
-            if(logs.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-[#B7A7BE]">No history yet.</td></tr>`;
-            } else {
-                logs.forEach(log => {
-                    let qtyColor = log.qtyChange > 0 ? "text-[#1F9D55]" : "text-[#C81E5C]";
-                    let prefix = log.qtyChange > 0 ? "+" : "";
-                    tbody.innerHTML += `
-                        <tr class="hover:bg-white">
-                            <td class="py-2 px-2 text-[10px] text-[#6B5470] whitespace-nowrap">${formatDateTime(log.timestamp)}</td>
-                            <td class="py-2 px-2 text-[10px] font-medium text-[#2B1B33]">${log.action}</td>
-                            <td class="py-2 px-2 text-[10px] font-bold ${qtyColor}">${prefix}${log.qtyChange}</td>
-                            <td class="py-2 px-2 text-[10px] text-[#6B5470] truncate max-w-[120px]" title="${log.note}">${log.note}</td>
-                        </tr>
-                    `;
-                });
-            }
-            document.getElementById('logsModal').classList.remove('hidden');
-        }
-
-        function closeLogsModal() { document.getElementById('logsModal').classList.add('hidden'); }
-
-        function loadInventory() {
-            const tbody = document.getElementById('inventoryTableBody'); tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-[#B7A7BE]">Loading...</td></tr>`;
-            let inventory = db.getInventory();
-            inventory.sort((a, b) => b.timestamp - a.timestamp);
-            let totalStock = 0; allProductsCache = [];
-            inventory.forEach(p => { totalStock += (p.qty || 0); allProductsCache.push(p); });
-            renderInventoryTable(totalStock);
-        }
-        function filterInventoryByCategory(cat) { currentInventoryCategory = cat; loadCategoryDropdowns(); let ts = allProductsCache.reduce((s, p) => s + (p.qty||0), 0); renderInventoryTable(ts); }
-        function renderInventoryTable(totalStock) {
-            const tbody = document.getElementById('inventoryTableBody'); tbody.innerHTML = "";
-            let filtered = allProductsCache.filter(p => (currentInventoryCategory === 'All' || p.category === currentInventoryCategory));
-            if(filtered.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-[#B7A7BE]">No records.</td></tr>`; return; }
-            filtered.forEach(p => {
-                let price = getPrice(p.cost, totalStock);
-                tbody.innerHTML += `
-                    <tr class="hover:bg-white">
-                        <td class="py-2 px-1 flex items-center gap-1.5">
-                            ${p.image ? `<img src="${p.image}" class="w-6 h-6 rounded object-cover">` : `<div class="w-6 h-6 bg-[#FBF1F7] rounded"></div>`}
-                            <span class="font-medium text-[#2B1B33] w-24 truncate" title="${p.name}">${p.name}</span>
-                        </td>
-                        <td class="py-2 px-1 text-[#6B5470]">${p.category}</td>
-                        <td class="py-2 px-1 font-semibold text-[#C81E5C]">₱${price.toFixed(2)}</td>
-                        <td class="py-2 px-1 font-medium text-[#6B5470]">${p.qty}</td>
-                        <td class="py-2 px-1 text-right space-x-1">
-                            <button onclick="viewLogs('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="text-[#1F9D55] hover:underline text-[10px]">Logs</button>
-                            <button onclick="triggerEdit('${p.id}')" class="text-[#C81E5C] hover:underline mr-1 text-[10px]">Edit</button>
-                            <button onclick="deleteProduct('${p.id}')" class="text-[#DC2626] hover:underline text-[10px]">Del</button>
-                        </td>
-                    </tr>`;
-            });
-        }
-        function deleteProduct(id) {
-            let inventory = db.getInventory();
-            inventory = inventory.filter(x => x.id !== id);
-            db.saveInventory(inventory);
-            loadInventory();
-            showToast("Product deleted.");
-        }
-        function filterInventory() { let input = document.getElementById('searchInventory').value.toLowerCase(); let rows = document.getElementById('inventoryTableBody').getElementsByTagName('tr'); for(let r of rows) r.style.display = r.innerText.toLowerCase().includes(input) ? "" : "none"; }
-
-        window.onload = function() {
-            clearProductForm();
-            loadCategoryDropdowns();
-            loadSetupConfigToUi();
-            loadPosCatalog();
-        }
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

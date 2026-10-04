@@ -591,7 +591,7 @@
                         <label class="block font-medium text-[#6B5470] mb-1">Order Type</label>
                         <select id="checkoutType" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none bg-white">
                             <option value="regular">Regular</option>
-                            <option value="pre-order">Pre-order</option>
+                            <option value="preorder">Pre-order</option>
                         </select>
                     </div>
                     <div>
@@ -601,7 +601,11 @@
                             <option value="unpaid">Not Paid</option>
                         </select>
                     </div>
+                    </div>
                 </div>
+                <div>
+                    <label class="block font-medium text-[#6B5470] mb-1">Discount (₱) - Subtracted from Total</label>
+                    <input type="number" id="checkoutDiscount" value="0" oninput="updateCheckoutGrandTotal()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg outline-none bg-[#FFF9F2] font-bold text-[#C81E5C]">
                 </div>
             </div>
             <div class="mb-4">

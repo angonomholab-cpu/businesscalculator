@@ -1359,6 +1359,7 @@ function openCheckoutModal(evt) {
     $('checkoutCustomer').value = '';
     $('checkoutType').value = 'regular';
     $('checkoutPayment').value = 'paid';
+    $('checkoutDiscount').value = '0';
 
     const pkgs = setupData.packaging || [];
     const addonsList = $('checkoutAddonsList');
@@ -1383,8 +1384,9 @@ function openCheckoutModal(evt) {
 
 window.updateCheckoutGrandTotal = function() {
     let total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-    document.querySelectorAll('.checkout-addon-cb:checked').forEach(cb => { total += num(cb.dataset.cost); });
-    $('checkoutGrandTotal').innerText = peso(total);
+    const discount = num($('checkoutDiscount').value);
+    total -= discount;
+    $('checkoutGrandTotal').innerText = peso(Math.max(0, total));
 };
 
 function closeCheckoutModal() {
@@ -1401,15 +1403,28 @@ async function confirmCheckout(evt) {
     setButtonBusy(btn, true, 'Processing...');
     try {
         const items = cart.map((i) => ({ id: i.id, name: i.name, qty: i.qty, price: i.price, cost: i.cost }));
+        
         document.querySelectorAll('.checkout-addon-cb:checked').forEach(cb => {
             items.push({
                 id: null,
                 name: 'Add-on: ' + cb.dataset.name,
                 qty: 1,
-                price: num(cb.dataset.cost),
-                cost: num(cb.dataset.cost)
+                price: 0, // 0 price so it doesn't increase customer total
+                cost: num(cb.dataset.cost) // retains cost to reduce profit
             });
         });
+
+        const discount = num($('checkoutDiscount').value);
+        if (discount > 0) {
+            items.push({
+                id: null,
+                name: 'Discount',
+                qty: 1,
+                price: -discount, // reduces customer total
+                cost: 0
+            });
+        }
+        
         await db.checkout(items, cust, type, paid);
         showToast('Checkout Complete!');
         clearCart();

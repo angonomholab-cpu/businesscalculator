@@ -366,14 +366,25 @@
                         </div>
                     </div>
 
-                    <!-- SECTION C: TARGET PROFIT MARKUP -->
-                    <div class="p-4 bg-[#FFF9F2] rounded-2xl border border-[#F2DCE8] flex items-center justify-between">
-                        <div>
-                            <h3 class="font-bold text-[#2B1B33] text-xs">📈 Target Profit Markup (%)</h3>
-                            <p class="text-[10px] text-[#8A7690]">Percentage added on top of total unit cost + apportioned overhead.</p>
+                    <!-- SECTION C: TARGET PROFIT MARKUP & SALES VOLUME -->
+                    <div class="p-4 bg-[#FFF9F2] rounded-2xl border border-[#F2DCE8] flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="font-bold text-[#2B1B33] text-xs">📈 Target Profit Markup (%)</h3>
+                                <p class="text-[10px] text-[#8A7690]">Percentage added on top of total unit cost + apportioned overhead.</p>
+                            </div>
+                            <div class="w-48">
+                                <input type="number" step="0.1" id="setupTargetProfitPercent" oninput="calculateTotalExpenses()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg bg-white outline-none text-right font-bold text-sm">
+                            </div>
                         </div>
-                        <div class="w-48">
-                            <input type="number" step="0.1" id="setupTargetProfitPercent" oninput="calculateTotalExpenses()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg bg-white outline-none text-right font-bold text-sm">
+                        <div class="flex items-center justify-between border-t border-[#F2DCE8] pt-3">
+                            <div>
+                                <h3 class="font-bold text-[#2B1B33] text-xs">📦 Expected Monthly Sales Volume (pcs)</h3>
+                                <p class="text-[10px] text-[#8A7690]">Used to correctly apportion monthly overhead per item. Defaults to 100 if blank.</p>
+                            </div>
+                            <div class="w-48">
+                                <input type="number" id="setupExpectedMonthlyVolume" placeholder="100" oninput="calculateTotalExpenses()" class="w-full px-3 py-2 border border-[#F2DCE8] rounded-lg bg-white outline-none text-right font-bold text-sm">
+                            </div>
                         </div>
                     </div>
 

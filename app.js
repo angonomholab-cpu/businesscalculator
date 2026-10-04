@@ -573,8 +573,8 @@ async function loadFinancials() {
     $('metricMargin').innerText = `${margin.toFixed(1)}%`;
 
     // Compute Projected Profit for current inventory
-    const totalStock = totalStockOf();
-    const overheadPerUnit = monthlyExpense / (totalStock > 0 ? totalStock : 1);
+    const vol = setupData.expectedMonthlyVolume > 0 ? setupData.expectedMonthlyVolume : 100;
+    const overheadPerUnit = monthlyExpense / vol;
     let projectedProfit = 0;
     allProductsCache.forEach(p => {
         if (p.qty > 0) {
@@ -831,6 +831,8 @@ function calculateTotalExpenses() {
     setupData.rent = num($('setupRent').value);
     const tp = $('setupTargetProfitPercent').value;
     setupData.targetProfitPercent = tp === '' ? 30 : num(tp);
+    const vol = $('setupExpectedMonthlyVolume').value;
+    setupData.expectedMonthlyVolume = vol === '' ? 100 : num(vol);
 
     const t = monthlyTotals(setupData);
     $('totalFixedHeaderDisplay').innerText = `Total: ${peso(t.fixed)}`;
@@ -846,6 +848,7 @@ async function clearSetup() {
         setupData = EMPTY_SETUP();
         $('setupRent').value = 0;
         $('setupTargetProfitPercent').value = 30;
+        $('setupExpectedMonthlyVolume').value = 100;
         renderEmployeesTable();
         ['subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc', 'supplies'].forEach((k) => renderDynamicList(k, setupData[k]));
         calculateTotalExpenses();

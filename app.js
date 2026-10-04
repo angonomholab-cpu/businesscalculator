@@ -11,7 +11,7 @@
 const CFG = window.BIZSTORE_CONFIG || {};
 const DEFAULT_CATEGORIES = ['Skincare', 'Cosmetics', 'Apparel', 'General'];
 const SOLD_ACTION = 'Sold (Checkout)';
-const EMPTY_SETUP = () => ({ rent: 0, targetProfitPercent: 30, employees: [], subscriptions: [], utilities: [], packaging: [], marketing: [], permitsMisc: [] });
+const EMPTY_SETUP = () => ({ rent: 0, targetProfitPercent: 30, employees: [], subscriptions: [], utilities: [], packaging: [], marketing: [], permitsMisc: [], supplies: [] });
 
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -38,7 +38,7 @@ function normalizeSetup(s) {
     const base = EMPTY_SETUP();
     if (!s || typeof s !== 'object') return base;
     const out = { ...base, ...s };
-    ['employees', 'subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc'].forEach((k) => {
+    ['employees', 'subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc', 'supplies'].forEach((k) => {
         if (!Array.isArray(out[k])) out[k] = [];
     });
     out.rent = num(out.rent);
@@ -49,7 +49,7 @@ function normalizeSetup(s) {
 function monthlyTotals(cfg) {
     const c = normalizeSetup(cfg);
     const fixed = c.rent + sum(c.employees, 'salary') + sum(c.subscriptions, 'cost');
-    const variable = sum(c.utilities, 'cost') + sum(c.packaging, 'cost') + sum(c.marketing, 'cost') + sum(c.permitsMisc, 'cost');
+    const variable = sum(c.utilities, 'cost') + sum(c.packaging, 'cost') + sum(c.marketing, 'cost') + sum(c.permitsMisc, 'cost') + sum(c.supplies, 'cost');
     return { fixed, variable, total: fixed + variable };
 }
 
@@ -452,7 +452,7 @@ async function loadSetupConfigToUi() {
     $('setupRent').value = setupData.rent || 0;
     $('setupTargetProfitPercent').value = setupData.targetProfitPercent;
     renderEmployeesTable();
-    ['subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc'].forEach((k) => renderDynamicList(k, setupData[k]));
+    ['subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc', 'supplies'].forEach((k) => renderDynamicList(k, setupData[k]));
     calculateTotalExpenses();
 
     if (!$('financialTimePickerContainer').innerHTML.trim()) toggleFinancialViewMode();
@@ -724,7 +724,7 @@ async function clearSetup() {
         $('setupRent').value = 0;
         $('setupTargetProfitPercent').value = 30;
         renderEmployeesTable();
-        ['subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc'].forEach((k) => renderDynamicList(k, setupData[k]));
+        ['subscriptions', 'utilities', 'packaging', 'marketing', 'permitsMisc', 'supplies'].forEach((k) => renderDynamicList(k, setupData[k]));
         calculateTotalExpenses();
         loadFinancials();
         showToast('Setup cleared.');

@@ -646,6 +646,32 @@ function renderDynamicList(key, items) {
             </div>`;
         }
 
+        if (key === 'packaging') {
+            const q = item.qty || 1;
+            const unitCost = num(item.cost) / q;
+            return `
+            <div class="flex flex-col gap-1 bg-white p-1.5 rounded-lg border border-[#F2DCE8] mb-1.5">
+                <div class="flex gap-1.5 items-center">
+                    <input type="text" value="${esc(item.name)}" oninput="updateDynamicItem('${key}', ${i}, 'name', this.value)" placeholder="Packaging Name" class="flex-grow min-w-0 px-2 py-1 text-[11px] outline-none">
+                    <button type="button" onclick="removeDynamicItem('${key}', ${i})" class="text-[#DC2626] px-1 font-bold">×</button>
+                </div>
+                <div class="flex gap-1.5 items-center bg-[#FFF9F2] p-1 rounded">
+                    <div class="flex flex-col w-16">
+                        <label class="text-[8px] text-[#8A7690]">Qty/pack</label>
+                        <input type="number" value="${q}" oninput="updateDynamicItem('${key}', ${i}, 'qty', this.value)" placeholder="Qty" class="w-full px-1 py-0.5 text-[10px] outline-none border border-[#F2DCE8] rounded">
+                    </div>
+                    <div class="flex flex-col flex-grow">
+                        <label class="text-[8px] text-[#8A7690]">Pack Cost</label>
+                        <input type="number" value="${esc(item.cost)}" oninput="updateDynamicItem('${key}', ${i}, 'cost', this.value)" placeholder="Cost" class="w-full px-1 py-0.5 text-[10px] outline-none border border-[#F2DCE8] rounded text-[#C81E5C] font-medium">
+                    </div>
+                    <div class="flex flex-col w-16 text-right">
+                        <label class="text-[8px] text-[#8A7690]">Cost / pc</label>
+                        <span class="text-[10px] font-bold text-[#C81E5C] mt-1">₱${unitCost.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>`;
+        }
+
         return `
         <div class="flex gap-1.5 items-center bg-white p-1.5 rounded-lg border border-[#F2DCE8] mb-1.5">
             <input type="text" value="${esc(item.name)}" oninput="updateDynamicItem('${key}', ${i}, 'name', this.value)" placeholder="Name" class="flex-grow min-w-0 px-2 py-1 text-[11px] outline-none">
@@ -669,7 +695,8 @@ window.handleSupplySelect = function(sel, idx) {
 
 function addDynamicItem(key) {
     if (!setupData[key]) setupData[key] = [];
-    setupData[key].push({ id: localId(), name: '', cost: 0 });
+    if (key === 'packaging') setupData[key].push({ id: localId(), name: '', cost: 0, qty: 1 });
+    else setupData[key].push({ id: localId(), name: '', cost: 0 });
     renderDynamicList(key, setupData[key]);
     calculateTotalExpenses();
     const inputs = $(`${key}List`).querySelectorAll('input[type="text"]');
@@ -677,8 +704,15 @@ function addDynamicItem(key) {
 }
 function updateDynamicItem(key, index, field, value) {
     if (!setupData[key] || !setupData[key][index]) return;
-    setupData[key][index][field] = field === 'cost' ? num(value) : value;
+    setupData[key][index][field] = (field === 'cost' || field === 'qty') ? num(value) : value;
     calculateTotalExpenses();
+    
+    // Auto-refresh the list for packaging so "Cost/pc" updates immediately
+    if (key === 'packaging' && (field === 'cost' || field === 'qty')) {
+        renderDynamicList(key, setupData[key]);
+        const inputs = $(`${key}List`).querySelectorAll(`input[placeholder="${field === 'cost' ? 'Cost' : 'Qty'}"]`);
+        if (inputs.length) inputs[index].focus();
+    }
 }
 function removeDynamicItem(key, index) {
     setupData[key].splice(index, 1);

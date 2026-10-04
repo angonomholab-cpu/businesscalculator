@@ -116,10 +116,10 @@ const localDb = {
     async getFinancialLogs(from, to) {
         const f = from.getTime(), t = to.getTime();
         return LS.get('bizstore_logs', [])
-            .filter((l) => (l.action === SOLD_ACTION || l.action.includes('(In)')) && l.timestamp >= f && l.timestamp < t)
+            .filter((l) => (l.action.includes('Sold') || l.action.includes('Pre-order') || l.action.includes('(In)')) && l.timestamp >= f && l.timestamp < t)
             .map((l) => ({ timestamp: l.timestamp, action: l.action, revenue: revenueOf(l) || 0, qtyChange: l.qtyChange || 0, productId: l.productId }));
     },
-
+    async getPendingProfit() { return 0; }, // localDb doesn't have robust pending logic
     async getSetup(month) {
         return LS.get('bizConfig_v6_' + month, null) || LS.get('bizConfig_v5', null);
     },
@@ -269,6 +269,17 @@ function createSupabaseDb() {
             else if (statusFilter === 'Completed') q = q.eq('status', 'released').eq('payment_status', 'paid');
             else if (statusFilter === 'Cancelled') q = q.eq('status', 'cancelled');
             return check(await q.limit(200));
+        },
+        async getPendingProfit() {
+            const res = await sb.from('orders').select('total, order_items(unit_cost, qty)').eq('status', 'pending');
+            if (res.error) return 0;
+            let p = 0;
+            res.data.forEach(o => {
+                let cost = 0;
+                if (o.order_items) o.order_items.forEach(i => cost += Number(i.unit_cost) * Number(i.qty));
+                p += Number(o.total) - cost;
+            });
+            return p;
         },
         async releaseOrder(id) { check(await sb.rpc('release_order', { p_order_id: id })); },
         async cancelOrder(id) { check(await sb.rpc('cancel_order', { p_order_id: id })); },
@@ -573,6 +584,11 @@ async function loadFinancials() {
             projectedProfit += (profitAmount * p.qty);
         }
     });
+    
+    // Add pending preorders profit
+    const pendingProfit = db.getPendingProfit ? await db.getPendingProfit() : 0;
+    projectedProfit += pendingProfit;
+    
     $('metricProjectedProfit').innerText = peso(projectedProfit);
 
     const advice = $('financialAdvice');

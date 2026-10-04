@@ -101,11 +101,9 @@ begin
             insert into public.order_items (order_id, product_id, product_name, qty, unit_price, unit_cost, line_total)
             values (v_id, null, v_name, v_sold, v_price, v_cost, round(v_sold * v_price, 2));
 
-            if p_type = 'regular' then
-                insert into public.stock_logs (product_id, product_name, action, qty_change, revenue, note)
-                values (null, v_name, 'Sold (Checkout)', -v_sold, round(v_sold * v_price, 2),
-                        'Order #' || left(v_id::text, 8) || coalesce(' · ' || v_cust, ''));
-            end if;
+            insert into public.stock_logs (product_id, product_name, action, qty_change, revenue, note)
+            values (null, v_name, case when p_type = 'preorder' then 'Pre-order (Checkout)' else 'Sold (Checkout)' end, -v_sold, case when p_type = 'preorder' then 0 else round(v_sold * v_price, 2) end,
+                    'Order #' || left(v_id::text, 8) || coalesce(' · ' || v_cust, ''));
 
             v_total := v_total + v_sold * v_price;
             continue;
@@ -119,17 +117,15 @@ begin
             raise exception 'Product not found';
         end if;
 
-        if p_type = 'regular' then
-            if v_sold > v_qty then
-                raise exception 'Kulang ang stock ng %: % na lang', v_name, v_qty;
-            end if;
-            update public.products set qty = qty - v_sold, updated_at = now()
-            where id = (it->>'id')::uuid;
-
-            insert into public.stock_logs (product_id, product_name, action, qty_change, revenue, note)
-            values ((it->>'id')::uuid, v_name, 'Sold (Checkout)', -v_sold, round(v_sold * v_price, 2),
-                    'Order #' || left(v_id::text, 8) || coalesce(' · ' || v_cust, ''));
+        if v_sold > v_qty then
+            raise exception 'Kulang ang stock ng %: % na lang', v_name, v_qty;
         end if;
+        update public.products set qty = qty - v_sold, updated_at = now()
+        where id = (it->>'id')::uuid;
+
+        insert into public.stock_logs (product_id, product_name, action, qty_change, revenue, note)
+        values ((it->>'id')::uuid, v_name, case when p_type = 'preorder' then 'Pre-order (Checkout)' else 'Sold (Checkout)' end, -v_sold, case when p_type = 'preorder' then 0 else round(v_sold * v_price, 2) end,
+                'Order #' || left(v_id::text, 8) || coalesce(' · ' || v_cust, ''));
 
         insert into public.order_items (order_id, product_id, product_name, qty, unit_price, unit_cost, line_total)
         values (v_id, (it->>'id')::uuid, v_name, v_sold, v_price, v_cost, round(v_sold * v_price, 2));
@@ -158,18 +154,8 @@ begin
     if v_order.status <> 'pending' then raise exception 'Hindi pending ang order na ito'; end if;
 
     for r in select * from public.order_items where order_id = p_order_id loop
-        if r.product_id is not null then
-            select qty into v_qty from public.products where id = r.product_id for update;
-            if found then
-                if r.qty > v_qty then
-                    raise exception 'Kulang ang stock ng %: % na lang', r.product_name, v_qty;
-                end if;
-                update public.products set qty = qty - r.qty, updated_at = now() where id = r.product_id;
-            end if;
-        end if;
-
         insert into public.stock_logs (product_id, product_name, action, qty_change, revenue, note)
-        values (r.product_id, r.product_name, 'Sold (Checkout)', -r.qty, r.line_total,
+        values (r.product_id, r.product_name, 'Sold (Released)', 0, r.line_total,
                 'Pre-order released #' || left(p_order_id::text, 8) || coalesce(' · ' || v_order.customer_name, ''));
     end loop;
 
@@ -193,16 +179,15 @@ begin
     if not found then raise exception 'Order not found'; end if;
     if v_order.status = 'cancelled' then raise exception 'Cancelled na ang order na ito'; end if;
 
-    if v_order.status = 'released' then
-        for r in select * from public.order_items where order_id = p_order_id loop
-            if r.product_id is not null then
-                update public.products set qty = qty + r.qty, updated_at = now() where id = r.product_id;
-            end if;
-            insert into public.stock_logs (product_id, product_name, action, qty_change, revenue, note)
-            values (r.product_id, r.product_name, 'Order Cancelled (Return)', r.qty, -r.line_total,
-                    'Cancelled #' || left(p_order_id::text, 8) || coalesce(' · ' || v_order.customer_name, ''));
-        end loop;
-    end if;
+    for r in select * from public.order_items where order_id = p_order_id loop
+        if r.product_id is not null then
+            update public.products set qty = qty + r.qty, updated_at = now() where id = r.product_id;
+        end if;
+        insert into public.stock_logs (product_id, product_name, action, qty_change, revenue, note)
+        values (r.product_id, r.product_name, 'Order Cancelled (Return)', r.qty, 
+                case when v_order.status = 'released' then -r.line_total else 0 end,
+                'Cancelled #' || left(p_order_id::text, 8) || coalesce(' · ' || v_order.customer_name, ''));
+    end loop;
 
     update public.orders set status = 'cancelled' where id = p_order_id;
 end;

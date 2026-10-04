@@ -561,6 +561,20 @@ async function loadFinancials() {
     profitEl.className = `text-base font-bold ${netProfit >= 0 ? 'text-[#1F9D55]' : 'text-[#DC2626]'}`;
     $('metricMargin').innerText = `${margin.toFixed(1)}%`;
 
+    // Compute Projected Profit for current inventory
+    const totalStock = totalStockOf();
+    const overheadPerUnit = monthlyExpense / (totalStock > 0 ? totalStock : 1);
+    let projectedProfit = 0;
+    allProductsCache.forEach(p => {
+        if (p.qty > 0) {
+            const price = getPrice(p, totalStock);
+            const baseCost = Number(p.cost) || 0;
+            const profitAmount = price - baseCost - overheadPerUnit;
+            projectedProfit += (profitAmount * p.qty);
+        }
+    });
+    $('metricProjectedProfit').innerText = peso(projectedProfit);
+
     const advice = $('financialAdvice');
     if (totalRevenue === 0 && totalExpenses === 0) {
         advice.innerText = 'Tip: Mag-checkout ng items at i-save ang expenses para makita ang performance.';
